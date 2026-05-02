@@ -1,0 +1,15 @@
+# Minimal requirements for quick start
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+pydantic==2.5.3
+pydantic-settings==2.1.0
+python-dotenv==1.0.0
+
+# Redis for caching
+redis==5.0.1
+
+# IBM Cloud packages (install separately if needed)
+# ibmcloudant==0.7.0
+# ibm-watson==8.0.0
+# ibm-watsonx-ai==0.2.6

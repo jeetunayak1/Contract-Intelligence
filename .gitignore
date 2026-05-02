@@ -82,4 +82,7 @@ contracts/
 
 # Bob reports
 bob-report.md
-.bob/
+.bob/-e 
+# SSH Keys
+id_personal
+id_personal.pub

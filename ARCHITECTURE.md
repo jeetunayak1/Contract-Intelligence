@@ -1,550 +1,540 @@
-# Contract Intelligence & SLA Compliance System - Architecture
+# SOW Sentinel - Agentic Compliance Framework
 
-## Project Overview
+## 🎯 Project Vision
 
-**Problem Statement:** Organizations struggle with manual contract management, leading to missed SLA breaches, revenue leakage, and financial penalties.
-
-**Solution:** An agentic AI system that automatically parses contracts, monitors SLA compliance, and proactively identifies risks.
+**SOW Sentinel** is an AI-powered agentic system that prevents service companies from losing money through contract breaches, scope creep, and missed SLA deadlines. It reads complex Statements of Work (SOWs), extracts obligations, and connects to execution tools (GitHub/Jira/Calendar) to ensure compliance and protect margins.
 
 ---
 
-## System Architecture
+## 💡 The Core Problem
 
-### High-Level Architecture
+Service-based companies face critical challenges:
+
+1. **Revenue Leakage**: Teams work on out-of-scope tasks without billing
+2. **Financial Penalties**: Missing SLA deadlines triggers Liquidated Damages (LDs)
+3. **Contract Breaches**: Vague SOW clauses lead to disputes and lost revenue
+4. **Margin Erosion**: Scope creep eats into profitability
+5. **Manual Tracking**: No automated way to monitor SOW compliance
+
+**Real Impact**: A single missed milestone can cost $1,000-$10,000 per day in penalties.
+
+---
+
+## 🏗️ System Architecture: 4-Stage Agentic Pipeline
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        React Frontend                            │
-│  (Contract Upload, Dashboard, Alerts, Analytics)                │
-└────────────────────────┬────────────────────────────────────────┘
-                         │ REST API
-┌────────────────────────┴────────────────────────────────────────┐
-│                     Python Backend (FastAPI)                     │
+│                     SOW Sentinel System                          │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Stage 1: INGESTION AGENT (The Reader)                          │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │              Agent Orchestration Layer                    │  │
-│  │  (Coordinates all agents and manages workflow)            │  │
+│  │  Input: PDF/DOCX SOW                                      │  │
+│  │  Action: Extract Obligations using watsonx.ai            │  │
+│  │  Output: Structured JSON with:                           │  │
+│  │    - Deliverables & Milestones                           │  │
+│  │    - SLA Metrics (response/resolution times)             │  │
+│  │    - Financial Penalties (LDs)                           │  │
+│  │    - Dates & Deadlines                                   │  │
+│  │  Risk Scoring: Tag as "Vague", "High Financial Risk"     │  │
 │  └──────────────────────────────────────────────────────────┘  │
-│                                                                  │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐         │
-│  │  Contract    │  │  Compliance  │  │  Risk        │         │
-│  │  Agent       │  │  Agent       │  │  Agent       │         │
-│  └──────────────┘  └──────────────┘  └──────────────┘         │
-│                                                                  │
-│  ┌──────────────┐  ┌──────────────┐                            │
-│  │  Alert       │  │  Forecast    │                            │
-│  │  Agent       │  │  Agent       │                            │
-│  └──────────────┘  └──────────────┘                            │
-└────────────────────────┬────────────────────────────────────────┘
-                         │
-┌────────────────────────┴────────────────────────────────────────┐
-│                    IBM Cloud Services                            │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Stage 2: MAPPING AGENT (The Bridge)                            │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │  watsonx.ai - LLM for contract parsing & analysis        │  │
-│  │  watsonx Orchestrate - Agent workflow automation         │  │
-│  │  Watson Discovery - Document intelligence                │  │
-│  │  Cloudant/PostgreSQL - Data storage                      │  │
-│  │  Cloud Functions - Serverless processing                 │  │
-│  │  Event Streams (Kafka) - Real-time event processing      │  │
+│  │  Input: Extracted Obligations + GitHub/Jira APIs         │  │
+│  │  Action: Map SOW requirements to execution tools         │  │
+│  │  Examples:                                               │  │
+│  │    - "SOW Milestone 1" → "GitHub Project Board v1.0"    │  │
+│  │    - "Security Audit" → "Jira Epic SECURITY-123"        │  │
+│  │    - "Monthly Report" → "Recurring Calendar Event"      │  │
+│  │  Output: Linked obligations with tracking IDs           │  │
+│  └──────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Stage 3: MONITORING AGENT (The Watchman)                       │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  Continuous Loop (Every 4 hours):                        │  │
+│  │  1. Compare SOW Deadline vs Git Commit Velocity         │  │
+│  │  2. Check Jira progress vs SOW milestones               │  │
+│  │  3. Scan Slack/Email for undocumented change requests   │  │
+│  │  4. Calculate "Days to Penalty" for each obligation     │  │
+│  │  5. Detect scope creep (work not in SOW)                │  │
+│  │  Output: Real-time compliance status & alerts           │  │
+│  └──────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Stage 4: EXECUTIVE AGENT (The Actor)                           │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  Automated Actions:                                       │  │
+│  │  1. Create Jira tasks for upcoming SOW deliverables     │  │
+│  │  2. Schedule Google Calendar "Pre-Delivery Reviews"     │  │
+│  │  3. Send Slack nudges for SLA deadline warnings         │  │
+│  │  4. Generate "Definition of Done" checklists            │  │
+│  │  5. Auto-format status reports per SOW requirements     │  │
+│  │  6. Block invoice release if milestones not met         │  │
 │  └──────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Agent System Design
+## 🎨 Key Features
 
-### 1. Contract Agent
-**Purpose:** Extract and structure contract data
+### A. Loss Prevention Dashboard
 
-**Capabilities:**
-- Parse PDF/DOCX contracts using Watson Discovery
-- Extract key terms using watsonx.ai LLM:
-  - Pricing structures and payment terms
-  - SLA commitments (uptime, response times, resolution times)
-  - Penalty clauses and financial implications
-  - Renewal dates and termination conditions
-  - Service scope and deliverables
-- Store structured data in database
-- Version control for contract amendments
+**Purpose**: Real-time visibility into financial risks
 
-**Technology Stack:**
-- watsonx.ai (granite-13b-chat or llama-3 models)
-- Watson Discovery for document processing
-- Python libraries: PyPDF2, python-docx, pydantic for data validation
+**Components**:
 
-### 2. Compliance Agent
-**Purpose:** Monitor SLA adherence in real-time
+1. **Penalty Countdown Timer**
+   - Live countdown to next LD trigger
+   - Shows: "48 hours until $5,000 penalty"
+   - Color-coded: Green (safe), Yellow (warning), Red (critical)
 
-**Capabilities:**
-- Compare contract obligations against operational data
-- Track metrics:
-  - System uptime vs. contracted uptime
-  - Incident response times vs. SLA commitments
-  - Resolution times vs. agreed thresholds
-  - Service availability metrics
-- Calculate compliance scores
-- Identify deviations and trends
+2. **Margin Leakage Alert**
+   - Detects out-of-scope work
+   - Shows: "Team spent 15 hours on Feature X (not in SOW)"
+   - Calculates lost revenue: "Unbilled work = $3,750"
 
-**Data Sources:**
-- System monitoring APIs (Prometheus, Grafana, etc.)
-- Incident management systems (ServiceNow, Jira)
-- Application performance monitoring tools
-- Custom operational data feeds
+3. **SLA Heatmap**
+   - Visual grid of all SLA metrics
+   - Green: Compliant, Yellow: At risk, Red: Breached
+   - Metrics: Response time, Resolution time, Uptime
 
-**Technology Stack:**
-- Python data processing (pandas, numpy)
-- Time-series analysis
-- Real-time data streaming via Event Streams
+4. **Financial Risk Score**
+   - Overall project health: 0-100
+   - Factors: Deadline proximity, velocity, scope creep
+   - Predictive: "85% chance of penalty in 2 weeks"
 
-### 3. Risk Agent
-**Purpose:** Detect and quantify financial/compliance risks
+### B. Automation & Execution
 
-**Capabilities:**
-- Identify potential SLA breaches before they occur
-- Calculate financial exposure from penalties
-- Detect revenue leakage opportunities:
-  - Underutilized services
-  - Missed billing opportunities
-  - Contract terms not being enforced
-- Risk scoring and prioritization
-- Pattern recognition for recurring issues
+1. **Smart Calendar Invites**
+   - Auto-schedule "Pre-Delivery Review" 48h before milestone
+   - Include: Checklist, stakeholders, SOW reference
 
-**Technology Stack:**
-- watsonx.ai for risk analysis
-- Machine learning models for pattern detection
-- Financial calculation engine
+2. **Auto-Action Items**
+   - Generate "Definition of Done" from SOW technical requirements
+   - Create GitHub PR templates with compliance checks
 
-### 4. Alert Agent
-**Purpose:** Proactive stakeholder notification
+3. **Status Report Generator**
+   - One-click report generation
+   - Pulls: Git commits, Jira progress, test results
+   - Formats per SOW's required structure
 
-**Capabilities:**
-- Multi-channel alerting (email, Slack, SMS, dashboard)
-- Intelligent alert routing based on severity and role
-- Actionable recommendations with each alert
-- Alert aggregation and deduplication
-- Escalation workflows
-
-**Alert Types:**
-- Critical: Imminent SLA breach (< 24 hours)
-- High: Potential breach detected (< 7 days)
-- Medium: Compliance trend concerns
-- Low: Informational updates
-
-**Technology Stack:**
-- IBM Cloud Functions for serverless alert processing
-- Integration with notification services
-- watsonx Orchestrate for workflow automation
-
-### 5. Forecast Agent (Optional)
-**Purpose:** Predictive risk management
-
-**Capabilities:**
-- Time-series forecasting of SLA metrics
-- Predict future compliance risks
-- Capacity planning recommendations
-- Seasonal pattern analysis
-- What-if scenario modeling
-
-**Technology Stack:**
-- watsonx.ai for predictive modeling
-- Python ML libraries (scikit-learn, Prophet)
-- Historical data analysis
+4. **Scope Creep Detector**
+   - Flags work not mapped to SOW
+   - Suggests: "Create Change Request for Feature Y"
 
 ---
 
-## IBM Cloud Services Integration
+## 📊 Data Models
 
-### watsonx.ai
-**Use Cases:**
-1. **Contract Parsing:** Use LLM to extract structured data from unstructured contracts
-2. **Natural Language Understanding:** Interpret complex legal language
-3. **Risk Analysis:** Analyze patterns and predict potential issues
-4. **Recommendation Generation:** Create actionable insights
-
-**Models to Use:**
-- `granite-13b-chat-v2` - For general contract analysis
-- `llama-3-70b-instruct` - For complex reasoning tasks
-- Custom fine-tuned models for domain-specific terms
-
-### watsonx Orchestrate
-**Use Cases:**
-1. **Agent Coordination:** Orchestrate multi-agent workflows
-2. **Automation:** Automate contract review processes
-3. **Integration:** Connect with external systems (ServiceNow, Jira, etc.)
-4. **Workflow Management:** Define and execute business processes
-
-**Skills to Build:**
-- Contract upload and processing workflow
-- SLA monitoring and alerting workflow
-- Risk assessment and reporting workflow
-- Stakeholder notification workflow
-
-### Watson Discovery
-**Use Cases:**
-1. **Document Intelligence:** Extract text and metadata from contracts
-2. **Entity Recognition:** Identify key contract entities
-3. **Classification:** Categorize contract types and clauses
-
-### Cloudant or PostgreSQL on IBM Cloud
-**Use Cases:**
-1. **Contract Storage:** Store parsed contract data
-2. **SLA Metrics:** Time-series data for compliance tracking
-3. **Alert History:** Audit trail of all alerts and actions
-4. **User Management:** Store user profiles and permissions
-
-### IBM Cloud Functions
-**Use Cases:**
-1. **Event-Driven Processing:** Trigger agents based on events
-2. **Scheduled Jobs:** Periodic compliance checks
-3. **Webhook Handlers:** Process external system notifications
-
-### Event Streams (Apache Kafka)
-**Use Cases:**
-1. **Real-Time Data Ingestion:** Stream operational metrics
-2. **Event-Driven Architecture:** Decouple agents and services
-3. **Audit Logging:** Track all system events
-
----
-
-## Data Flow
-
-### Contract Ingestion Flow
-```
-1. User uploads contract (PDF/DOCX) → Frontend
-2. Frontend sends to Backend API → /api/contracts/upload
-3. Contract Agent triggered:
-   a. Watson Discovery extracts text
-   b. watsonx.ai parses and structures data
-   c. Validation and storage in database
-4. Compliance Agent subscribes to new contract event
-5. Initial baseline metrics established
+### SOW Document (Cloudant)
+```json
+{
+  "_id": "SOW-2024-ACME-001",
+  "type": "sow",
+  "client_name": "Acme Corp",
+  "project_name": "Enterprise Platform Migration",
+  "start_date": "2024-01-01",
+  "end_date": "2024-12-31",
+  "total_value": 500000,
+  "obligations": [
+    {
+      "id": "OBL-001",
+      "type": "deliverable",
+      "description": "Phase 1: Database Migration",
+      "deadline": "2024-03-31",
+      "penalty_amount": 5000,
+      "penalty_frequency": "per_day",
+      "risk_level": "high",
+      "status": "in_progress",
+      "mapped_to": {
+        "github_project": "acme-migration",
+        "jira_epic": "ACME-123"
+      }
+    }
+  ],
+  "sla_terms": [
+    {
+      "id": "SLA-001",
+      "metric": "incident_response_time",
+      "target": 4,
+      "unit": "hours",
+      "penalty_amount": 1000,
+      "measurement_period": "monthly"
+    }
+  ],
+  "vague_clauses": [
+    {
+      "clause": "Reasonable efforts for performance optimization",
+      "risk": "Undefined success criteria",
+      "recommendation": "Request specific metrics"
+    }
+  ]
+}
 ```
 
-### Real-Time Monitoring Flow
-```
-1. Operational data streams → Event Streams (Kafka)
-2. Compliance Agent consumes events:
-   a. Compares against SLA thresholds
-   b. Calculates compliance scores
-   c. Detects deviations
-3. Risk Agent analyzes compliance data:
-   a. Calculates financial exposure
-   b. Identifies patterns
-   c. Generates risk scores
-4. Alert Agent evaluates risks:
-   a. Determines severity
-   b. Routes to appropriate stakeholders
-   c. Sends notifications
-5. Forecast Agent (background):
-   a. Analyzes historical trends
-   b. Predicts future risks
-   c. Updates forecasts
+### Compliance Event (Cloudant)
+```json
+{
+  "_id": "EVENT-2024-05-02-001",
+  "type": "compliance_event",
+  "sow_id": "SOW-2024-ACME-001",
+  "obligation_id": "OBL-001",
+  "event_type": "deadline_warning",
+  "severity": "high",
+  "days_remaining": 7,
+  "current_progress": 65,
+  "required_progress": 100,
+  "velocity_trend": "declining",
+  "predicted_completion": "2024-05-15",
+  "penalty_exposure": 25000,
+  "actions_taken": [
+    "Created Jira task URGENT-456",
+    "Scheduled team sync for tomorrow",
+    "Sent Slack alert to PM"
+  ],
+  "timestamp": "2024-05-02T10:30:00Z"
+}
 ```
 
-### User Interaction Flow
-```
-1. User accesses dashboard → React Frontend
-2. Frontend fetches data → Backend API
-3. Backend aggregates data from:
-   - Contract database
-   - Compliance metrics
-   - Risk assessments
-   - Alert history
-4. Frontend displays:
-   - Contract overview
-   - SLA compliance dashboard
-   - Risk heatmap
-   - Active alerts
-   - Forecast predictions
+### Scope Creep Detection
+```json
+{
+  "_id": "SCOPE-2024-05-02-001",
+  "type": "scope_creep",
+  "sow_id": "SOW-2024-ACME-001",
+  "detected_work": {
+    "description": "Advanced Analytics Dashboard",
+    "hours_spent": 40,
+    "cost": 10000,
+    "github_commits": ["abc123", "def456"],
+    "jira_tickets": ["ACME-789"]
+  },
+  "sow_match": null,
+  "recommendation": "Create Change Request CR-2024-05",
+  "potential_revenue": 15000,
+  "status": "pending_approval"
+}
 ```
 
 ---
 
-## Technology Stack
+## 🔌 Integration Architecture
 
-### Frontend
-- **Framework:** React 18+ with TypeScript
-- **UI Library:** Material-UI (MUI) or Ant Design
-- **State Management:** Redux Toolkit or Zustand
-- **Charts:** Recharts or Chart.js
-- **API Client:** Axios
-- **Build Tool:** Vite
+### GitHub Integration
+```python
+# Monitor commit velocity vs SOW deadlines
+class GitHubMonitor:
+    def check_milestone_progress(self, sow_obligation):
+        # Get commits for mapped project
+        commits = github_api.get_commits(
+            repo=obligation.mapped_to.github_project,
+            since=obligation.start_date
+        )
+        
+        # Calculate velocity
+        velocity = len(commits) / days_elapsed
+        required_velocity = remaining_work / days_remaining
+        
+        if velocity < required_velocity * 0.8:
+            return {
+                "status": "at_risk",
+                "action": "escalate_to_pm"
+            }
+```
 
-### Backend
-- **Framework:** FastAPI (Python 3.11+)
-- **Agent Framework:** LangChain or custom agent implementation
-- **Data Validation:** Pydantic
-- **Database ORM:** SQLAlchemy (PostgreSQL) or Cloudant SDK
-- **Task Queue:** Celery with Redis
-- **API Documentation:** OpenAPI/Swagger (auto-generated by FastAPI)
+### Jira Integration
+```python
+# Auto-create tasks from SOW obligations
+class JiraExecutor:
+    def create_compliance_tasks(self, sow_obligation):
+        # Create epic for major deliverable
+        epic = jira_api.create_epic(
+            title=f"SOW: {obligation.description}",
+            due_date=obligation.deadline,
+            custom_fields={
+                "penalty_amount": obligation.penalty_amount,
+                "sow_reference": obligation.id
+            }
+        )
+        
+        # Create pre-delivery review task
+        review_date = obligation.deadline - timedelta(days=2)
+        jira_api.create_task(
+            title=f"Pre-Delivery Review: {obligation.description}",
+            due_date=review_date,
+            parent=epic.id
+        )
+```
+
+### Google Calendar Integration
+```python
+# Auto-schedule compliance checkpoints
+class CalendarExecutor:
+    def schedule_compliance_events(self, sow_obligation):
+        # Pre-delivery review
+        calendar_api.create_event(
+            title=f"SOW Compliance Review: {obligation.description}",
+            start=obligation.deadline - timedelta(days=2),
+            duration=60,
+            attendees=["pm@company.com", "tech-lead@company.com"],
+            description=f"Review checklist:\n{obligation.checklist}"
+        )
+        
+        # Weekly progress sync
+        calendar_api.create_recurring_event(
+            title=f"SOW Progress: {obligation.description}",
+            frequency="weekly",
+            duration=30
+        )
+```
+
+---
+
+## 🚨 Alert System
+
+### Alert Types & Actions
+
+1. **Critical (Red) - Immediate Action Required**
+   - Trigger: < 24 hours to penalty
+   - Action: Slack DM to PM + CEO, Create P0 Jira ticket
+   - Example: "URGENT: UAT sign-off due in 18 hours. $5,000/day penalty starts tomorrow."
+
+2. **High (Orange) - Urgent Attention**
+   - Trigger: < 7 days to deadline, velocity declining
+   - Action: Slack channel alert, Schedule emergency meeting
+   - Example: "WARNING: Phase 1 delivery at risk. Current velocity: 60% of required."
+
+3. **Medium (Yellow) - Monitor Closely**
+   - Trigger: Scope creep detected
+   - Action: Email to PM, Create change request draft
+   - Example: "SCOPE ALERT: 40 hours spent on out-of-scope Feature X. Potential revenue: $15k."
+
+4. **Low (Blue) - Informational**
+   - Trigger: Upcoming milestone in 30 days
+   - Action: Calendar invite for planning session
+   - Example: "INFO: Phase 2 kickoff in 30 days. Schedule requirements review."
+
+---
+
+## 🎬 Demo Flow (The "Wow" Moment)
+
+### Opening Scene: Risk Report Screen
+
+**Visual**: Dashboard with flashing red alert
+
+**AI Voice**: "If you don't deliver the UAT sign-off by Friday, you lose $5,000 per day."
+
+**Screen Shows**:
+- PDF SOW with highlighted clause
+- Countdown timer: "48:23:15 until penalty"
+- Current status: "UAT document at 75% completion"
+- Action items: "3 critical tasks blocking sign-off"
+
+**Impact**: Immediate understanding of financial risk
+
+### Scene 2: Scope Creep Detection
+
+**Visual**: Margin leakage alert
+
+**Screen Shows**:
+- "Team spent 40 hours on Advanced Analytics Dashboard"
+- "This feature is NOT in the SOW"
+- "Unbilled work value: $10,000"
+- "Recommended action: Create Change Request CR-2024-05"
+
+**Impact**: Shows how system protects margins
+
+### Scene 3: Auto-Execution
+
+**Visual**: Executive Agent in action
+
+**Screen Shows**:
+- Jira task auto-created: "Complete UAT Documentation"
+- Calendar invite sent: "Pre-Delivery Review - Thursday 2 PM"
+- Slack message: "Reminder: UAT sign-off due Friday"
+- GitHub PR checklist: "Security audit required per SOW Section 8.4"
+
+**Impact**: Demonstrates automation value
+
+---
+
+## 🔮 Future Roadmap (Agentic Evolution)
+
+### Phase 1: Self-Healing Invoices
+- System blocks invoice release until all SOW milestones are "Green"
+- Auto-generates invoice with SOW milestone references
+- Flags any unbilled scope creep work
+
+### Phase 2: Predictive Resourcing
+- AI predicts breach 2 weeks in advance
+- Suggests: "Reassign Developer X to speed up Module Y"
+- Calculates: "Adding 1 developer reduces penalty risk by 80%"
+
+### Phase 3: Agentic Negotiation
+- AI reviews new draft SOWs
+- Warns: "You lost 15% margin on last project with 'Uncapped Support' clause"
+- Suggests: "Renegotiate to 'Max 40 hours/month support'"
+- Provides: Historical data on similar clauses
+
+### Phase 4: Contract Intelligence
+- AI learns from past SOWs
+- Identifies: "Vague clauses that led to disputes"
+- Recommends: "Standard clauses that protect margins"
+- Generates: "Risk-adjusted pricing for new SOWs"
+
+---
+
+## 🛠️ Technology Stack
+
+### Backend (Python)
+- **Framework**: FastAPI
+- **Agent Framework**: LangChain or CrewAI
+- **LLM**: IBM watsonx.ai (granite-13b-chat-v2)
+- **Document Processing**: Watson Discovery
+- **Database**: IBM Cloudant (NoSQL)
+- **Task Queue**: Celery + Redis
+- **APIs**: GitHub, Jira, Google Calendar, Slack
+
+### Frontend (React)
+- **Framework**: React 18 + TypeScript
+- **UI**: Material-UI
+- **Charts**: Recharts
+- **State**: Redux Toolkit
+- **Real-time**: WebSockets
 
 ### IBM Cloud Services
-- watsonx.ai (LLM and ML models)
-- watsonx Orchestrate (workflow automation)
+- watsonx.ai (SOW parsing, risk analysis)
 - Watson Discovery (document intelligence)
-- Cloudant or PostgreSQL (database)
-- Cloud Functions (serverless)
-- Event Streams (Kafka)
-- Cloud Object Storage (contract file storage)
-
-### DevOps
-- **Containerization:** Docker
-- **Orchestration:** Kubernetes on IBM Cloud
-- **CI/CD:** GitHub Actions or IBM Cloud Toolchain
-- **Monitoring:** IBM Cloud Monitoring, Prometheus, Grafana
+- Cloudant (data storage)
+- Cloud Functions (scheduled monitoring)
+- Event Streams (real-time events)
 
 ---
 
-## Database Schema
+## 📈 Success Metrics
 
-### Contracts Table
-```sql
-CREATE TABLE contracts (
-    id UUID PRIMARY KEY,
-    contract_number VARCHAR(100) UNIQUE,
-    customer_name VARCHAR(255),
-    contract_type VARCHAR(50),
-    start_date DATE,
-    end_date DATE,
-    renewal_date DATE,
-    status VARCHAR(50),
-    file_url TEXT,
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP
-);
+### Financial Impact
+- **Penalties Avoided**: Track $ saved from prevented breaches
+- **Revenue Recovered**: Scope creep converted to change requests
+- **Margin Protected**: % improvement in project profitability
+
+### Operational Impact
+- **Early Warning Time**: Average days before deadline when alert triggered
+- **Compliance Rate**: % of SOW obligations met on time
+- **Automation Rate**: % of manual tasks eliminated
+
+### Business Value
+- **ROI**: (Penalties Avoided + Revenue Recovered) / System Cost
+- **Time Saved**: Hours saved on manual SOW tracking
+- **Risk Reduction**: % decrease in contract disputes
+
+---
+
+## 🎯 Competitive Advantage
+
+**Why SOW Sentinel Wins**:
+
+1. **Service Provider Perspective**: Built for companies delivering services, not buying them
+2. **Financial Focus**: Directly prevents revenue loss and penalties
+3. **Agentic Automation**: Not just monitoring - takes action
+4. **Execution Integration**: Connects SOW to actual work (GitHub/Jira)
+5. **Predictive Intelligence**: Warns before problems occur
+
+**The Pitch**: "We save service companies from losing money on contracts they've already won."
+
+---
+
+## 📝 Sample Action Items (AI-Generated)
+
+### Financial Tasks
+```
+CRITICAL: Penalty Clause 5.2 active
+- Deliverable: UAT Sign-off Document
+- Deadline: May 15th, 2024 (48 hours)
+- Penalty: $1,000/day after deadline
+- Action: Schedule emergency review meeting
+- Blocker: Security audit pending
 ```
 
-### SLA Terms Table
-```sql
-CREATE TABLE sla_terms (
-    id UUID PRIMARY KEY,
-    contract_id UUID REFERENCES contracts(id),
-    metric_name VARCHAR(100),
-    metric_type VARCHAR(50), -- uptime, response_time, resolution_time
-    threshold_value DECIMAL,
-    threshold_unit VARCHAR(20), -- percentage, minutes, hours
-    penalty_amount DECIMAL,
-    penalty_currency VARCHAR(10),
-    measurement_period VARCHAR(50), -- monthly, quarterly, annually
-    created_at TIMESTAMP
-);
+### Operational Tasks
+```
+RECURRING: Bi-Weekly Progress Call
+- SOW Reference: Section 3.1
+- Frequency: Every 2 weeks
+- Attendees: PM, Tech Lead, Client Stakeholder
+- Agenda: Milestone progress, risk review
+- Calendar: Auto-scheduled
 ```
 
-### Compliance Metrics Table
-```sql
-CREATE TABLE compliance_metrics (
-    id UUID PRIMARY KEY,
-    contract_id UUID REFERENCES contracts(id),
-    sla_term_id UUID REFERENCES sla_terms(id),
-    measurement_date DATE,
-    actual_value DECIMAL,
-    threshold_value DECIMAL,
-    compliance_status VARCHAR(20), -- compliant, at_risk, breached
-    deviation_percentage DECIMAL,
-    created_at TIMESTAMP
-);
+### Technical Tasks
 ```
-
-### Risk Assessments Table
-```sql
-CREATE TABLE risk_assessments (
-    id UUID PRIMARY KEY,
-    contract_id UUID REFERENCES contracts(id),
-    risk_type VARCHAR(50), -- sla_breach, revenue_leakage, penalty_exposure
-    risk_level VARCHAR(20), -- critical, high, medium, low
-    financial_impact DECIMAL,
-    probability_score DECIMAL,
-    description TEXT,
-    recommendations TEXT,
-    assessed_at TIMESTAMP
-);
-```
-
-### Alerts Table
-```sql
-CREATE TABLE alerts (
-    id UUID PRIMARY KEY,
-    contract_id UUID REFERENCES contracts(id),
-    risk_assessment_id UUID REFERENCES risk_assessments(id),
-    alert_type VARCHAR(50),
-    severity VARCHAR(20),
-    title VARCHAR(255),
-    message TEXT,
-    status VARCHAR(20), -- new, acknowledged, resolved, dismissed
-    notified_users TEXT[], -- array of user IDs
-    created_at TIMESTAMP,
-    acknowledged_at TIMESTAMP,
-    resolved_at TIMESTAMP
-);
+REQUIREMENT: Data Encryption at Rest
+- SOW Reference: Security Clause 8.4
+- GitHub Issue: Created as SECURITY-789
+- Definition of Done:
+  ✓ Implement AES-256 encryption
+  ✓ Document key management
+  ✓ Pass security audit
+  ✓ Update deployment guide
 ```
 
 ---
 
-## API Endpoints
+## 🚀 Getting Started
 
-### Contract Management
-- `POST /api/contracts/upload` - Upload and parse contract
-- `GET /api/contracts` - List all contracts
-- `GET /api/contracts/{id}` - Get contract details
-- `PUT /api/contracts/{id}` - Update contract
-- `DELETE /api/contracts/{id}` - Delete contract
-- `GET /api/contracts/{id}/sla-terms` - Get SLA terms for contract
+### For Developers
+```bash
+# Clone repository
+git clone https://github.com/your-org/sow-sentinel.git
 
-### Compliance Monitoring
-- `GET /api/compliance/dashboard` - Get compliance overview
-- `GET /api/compliance/contracts/{id}` - Get compliance for specific contract
-- `GET /api/compliance/metrics` - Get historical compliance metrics
-- `POST /api/compliance/simulate` - Simulate compliance scenarios
+# Backend setup
+cd backend
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
 
-### Risk Management
-- `GET /api/risks` - List all active risks
-- `GET /api/risks/contracts/{id}` - Get risks for specific contract
-- `GET /api/risks/{id}` - Get risk details
-- `POST /api/risks/assess` - Trigger manual risk assessment
+# Configure IBM Cloud credentials
+cp .env.example .env
+# Edit .env with your watsonx.ai API keys
 
-### Alerts
-- `GET /api/alerts` - List all alerts
-- `GET /api/alerts/{id}` - Get alert details
-- `PUT /api/alerts/{id}/acknowledge` - Acknowledge alert
-- `PUT /api/alerts/{id}/resolve` - Resolve alert
-- `POST /api/alerts/configure` - Configure alert rules
+# Start backend
+python -m uvicorn app.main:app --reload
 
-### Analytics & Forecasting
-- `GET /api/analytics/trends` - Get compliance trends
-- `GET /api/analytics/forecasts` - Get risk forecasts
-- `GET /api/analytics/financial-impact` - Calculate financial impact
+# Frontend setup
+cd frontend
+npm install
+npm run dev
+```
 
----
-
-## Deployment Strategy
-
-### Development Environment
-1. Local development with Docker Compose
-2. Mock IBM Cloud services for testing
-3. Sample contracts and test data
-
-### IBM Cloud Deployment
-1. **Container Registry:** Push Docker images to IBM Cloud Container Registry
-2. **Kubernetes Cluster:** Deploy to IBM Cloud Kubernetes Service
-3. **Services Configuration:**
-   - watsonx.ai API keys and endpoints
-   - watsonx Orchestrate skills and workflows
-   - Watson Discovery collection setup
-   - Database provisioning (Cloudant or PostgreSQL)
-   - Event Streams topic configuration
-4. **CI/CD Pipeline:**
-   - GitHub Actions for automated testing
-   - Automated deployment to IBM Cloud
-   - Environment-specific configurations
-
-### Monitoring & Observability
-- IBM Cloud Monitoring for infrastructure metrics
-- Application logging with IBM Log Analysis
-- Custom dashboards for agent performance
-- Alert system health monitoring
+### For Business Users
+1. Upload your SOW (PDF/DOCX)
+2. Review extracted obligations
+3. Connect GitHub/Jira/Calendar
+4. Monitor the Loss Prevention Dashboard
+5. Let the agents handle compliance
 
 ---
 
-## Security Considerations
+## 📞 Support & Documentation
 
-1. **Data Encryption:**
-   - Encrypt contracts at rest (Cloud Object Storage encryption)
-   - TLS/SSL for data in transit
-   - Encrypt sensitive fields in database
-
-2. **Access Control:**
-   - Role-based access control (RBAC)
-   - IBM Cloud IAM integration
-   - API authentication with JWT tokens
-
-3. **Compliance:**
-   - GDPR compliance for customer data
-   - Audit logging for all operations
-   - Data retention policies
-
-4. **API Security:**
-   - Rate limiting
-   - Input validation
-   - SQL injection prevention
-   - XSS protection
+- **Architecture**: This document
+- **API Docs**: http://localhost:8000/docs
+- **User Guide**: docs/USER_GUIDE.md
+- **Integration Guide**: docs/INTEGRATIONS.md
+- **Demo Video**: [Link to 3-minute demo]
 
 ---
 
-## Success Metrics
-
-1. **Functional Metrics:**
-   - Contract parsing accuracy (>95%)
-   - SLA breach detection rate (100% of actual breaches)
-   - False positive rate (<10%)
-   - Alert response time (<5 minutes)
-
-2. **Business Metrics:**
-   - Revenue leakage identified
-   - Penalties avoided
-   - Time saved in manual contract review
-   - Compliance improvement percentage
-
-3. **Technical Metrics:**
-   - API response time (<500ms for 95th percentile)
-   - System uptime (>99.9%)
-   - Agent processing time
-   - Forecast accuracy
-
----
-
-## Future Enhancements
-
-1. **Advanced Analytics:**
-   - Contract comparison and benchmarking
-   - Industry standard comparisons
-   - Negotiation insights
-
-2. **Integration Expansion:**
-   - CRM systems (Salesforce, HubSpot)
-   - ERP systems (SAP, Oracle)
-   - Legal management systems
-
-3. **AI Improvements:**
-   - Fine-tuned models for specific industries
-   - Multi-language support
-   - Automated contract generation
-
-4. **Mobile Application:**
-   - iOS and Android apps
-   - Push notifications
-   - Offline access to key metrics
-
----
-
-## Hackathon Deliverables Checklist
-
-- [ ] Video demonstration (3 minutes max)
-- [ ] Written problem and solution statement (500 words)
-- [ ] IBM Bob and watsonx usage documentation
-- [ ] GitHub repository with code
-- [ ] Exported IBM Bob report
-- [ ] README with setup instructions
-- [ ] Architecture documentation (this file)
-- [ ] Demo data and sample contracts
-
----
-
-## Team Collaboration
-
-**Recommended Task Division:**
-1. **Backend Developer:** Python FastAPI, agent implementation, IBM Cloud integration
-2. **Frontend Developer:** React dashboard, data visualization, user experience
-3. **AI/ML Specialist:** watsonx.ai integration, model fine-tuning, forecast agent
-4. **DevOps Engineer:** IBM Cloud deployment, CI/CD, monitoring setup
-
-**Bobcoin Usage Strategy:**
-- Use Bob for code generation and review (15-20 Bobcoins)
-- Use Bob for architecture validation (5-10 Bobcoins)
-- Use Bob for debugging and optimization (10-15 Bobcoins)
-- Reserve Bobcoins for final polish and documentation (5-10 Bobcoins)
-
----
-
-## Getting Started
-
-See [README.md](README.md) for setup instructions and development guide.
+**Built with ❤️ for service companies who want to protect their margins and deliver on time.**

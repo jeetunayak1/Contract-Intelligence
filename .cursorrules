@@ -1,0 +1,539 @@
+# SOW Sentinel - AI Coding Rules
+
+## Project Overview
+SOW Sentinel is an agentic AI system for preventing revenue leakage and contract breaches in service-based companies. It monitors Statement of Work (SOW) compliance, detects scope creep, and automates corrective actions.
+
+## Core Technologies
+- **Backend**: Python 3.13, FastAPI, Pydantic
+- **Frontend**: React 18, TypeScript, Material-UI, Vite
+- **AI/ML**: IBM watsonx.ai (LLM for SOW parsing)
+- **Database**: IBM Cloudant (NoSQL)
+- **Integrations**: GitHub, Jira, Google Calendar, Slack
+
+## Architecture Principles
+
+### 4-Stage Agentic Pipeline
+1. **Ingestion Agent**: Parses SOW documents (PDF/DOCX) using watsonx.ai
+2. **Mapping Agent**: Maps obligations to GitHub issues and Jira tasks
+3. **Monitoring Agent**: Continuous compliance checking (4-hour intervals)
+4. **Executive Agent**: Automated actions (Jira tasks, calendar invites, Slack alerts)
+
+### Data Flow
+```
+SOW Upload → Ingestion Agent → Cloudant Storage
+           ↓
+Mapping Agent → GitHub/Jira Sync
+           ↓
+Monitoring Agent → Compliance Events
+           ↓
+Executive Agent → Automated Actions
+```
+
+## Code Style Guidelines
+
+### Python (Backend)
+```python
+# Use async/await for I/O operations
+async def get_risk_report(sow_id: str) -> dict:
+    """Get risk report for a specific SOW."""
+    pass
+
+# Use Pydantic for data validation
+from pydantic import BaseModel, Field
+
+class SOWDocument(BaseModel):
+    sow_number: str = Field(..., description="Unique SOW identifier")
+    client_name: str
+    total_value: float
+
+# Use type hints everywhere
+def calculate_penalty(days: int, rate: float) -> float:
+    return days * rate
+
+# Use descriptive variable names
+penalty_exposure = calculate_penalty_exposure(obligation)
+days_until_penalty = calculate_days_remaining(deadline)
+
+# Use enums for status types
+from enum import Enum
+
+class RiskLevel(str, Enum):
+    CRITICAL = "critical"
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+```
+
+### TypeScript (Frontend)
+```typescript
+// Use functional components with hooks
+const RiskReport: React.FC<RiskReportProps> = ({ sowId }) => {
+  const [data, setData] = useState<RiskReportData | null>(null);
+  
+  useEffect(() => {
+    fetchRiskReport();
+  }, [sowId]);
+  
+  return <Box>{/* UI */}</Box>;
+};
+
+// Use interfaces for props
+interface RiskReportProps {
+  sowId: string;
+}
+
+// Use Material-UI components
+import { Box, Card, Typography, LinearProgress } from '@mui/material';
+
+// Use descriptive component names
+const PenaltyCountdownTimer: React.FC<Props> = () => { };
+const SLAComplianceChart: React.FC<Props> = () => { };
+```
+
+## File Organization
+
+### Backend Structure
+```
+backend/
+├── app/
+│   ├── main_demo.py          # Demo API server
+│   ├── main.py               # Production API server
+│   ├── agents/               # AI agents
+│   │   ├── ingestion_agent.py
+│   │   ├── mapping_agent.py
+│   │   ├── monitoring_agent.py
+│   │   └── executive_agent.py
+│   ├── api/                  # REST API endpoints
+│   │   └── sow.py
+│   ├── models/               # Data models
+│   │   └── sow_models.py
+│   ├── core/                 # Core utilities
+│   │   ├── config.py
+│   │   └── cloudant_db.py
+│   └── services/             # Business logic
+```
+
+### Frontend Structure
+```
+frontend/
+├── src/
+│   ├── main.tsx              # Entry point
+│   ├── App.tsx               # Main component
+│   ├── pages/                # Page components
+│   │   ├── Dashboard.tsx
+│   │   ├── RiskReport.tsx
+│   │   └── LossPrevention.tsx
+│   ├── components/           # Reusable components
+│   ├── services/             # API clients
+│   ├── types/                # TypeScript types
+│   └── utils/                # Utilities
+```
+
+## Naming Conventions
+
+### Files
+- Python: `snake_case.py` (e.g., `ingestion_agent.py`)
+- TypeScript: `PascalCase.tsx` (e.g., `RiskReport.tsx`)
+- Config: `lowercase.ext` (e.g., `package.json`)
+
+### Variables & Functions
+- Python: `snake_case` (e.g., `calculate_penalty_exposure`)
+- TypeScript: `camelCase` (e.g., `fetchRiskReport`)
+- Constants: `UPPER_SNAKE_CASE` (e.g., `MAX_PENALTY_DAYS`)
+
+### Classes & Components
+- Python: `PascalCase` (e.g., `IngestionAgent`)
+- TypeScript: `PascalCase` (e.g., `RiskReport`)
+
+### API Endpoints
+- REST: `/api/v1/resource/action` (e.g., `/api/v1/sow/{id}/risk-report`)
+- Use kebab-case for multi-word resources
+
+## API Design Patterns
+
+### Request/Response
+```python
+# Use Pydantic models for request/response
+class RiskReportResponse(BaseModel):
+    success: bool
+    risk_report: dict
+    timestamp: datetime
+
+@router.get("/{sow_id}/risk-report", response_model=RiskReportResponse)
+async def get_risk_report(sow_id: str):
+    return RiskReportResponse(
+        success=True,
+        risk_report=data,
+        timestamp=datetime.now()
+    )
+```
+
+### Error Handling
+```python
+# Use HTTPException for errors
+from fastapi import HTTPException
+
+if not sow:
+    raise HTTPException(
+        status_code=404,
+        detail=f"SOW {sow_id} not found"
+    )
+```
+
+## Data Model Patterns
+
+### Cloudant Documents
+```python
+# All documents have _id and type
+{
+    "_id": "sow:SOW-2024-ACME-001",
+    "type": "sow_document",
+    "sow_number": "SOW-2024-ACME-001",
+    # ... other fields
+}
+
+# Use factory functions for document creation
+def create_sow_document(data: dict) -> dict:
+    return {
+        "_id": f"sow:{data['sow_number']}",
+        "type": "sow_document",
+        **data
+    }
+```
+
+## Demo Mode Guidelines
+
+### Backend Demo Data
+```python
+# Always provide demo data for testing without IBM Cloud
+DEMO_SOW = {
+    "sow_number": "SOW-2024-ACME-001",
+    "client_name": "Acme Corporation",
+    "project_name": "Enterprise Platform Migration",
+    "total_value": 500000.0,
+    # ... complete demo data
+}
+
+# Use environment variable to toggle demo mode
+USE_DEMO_MODE = os.getenv("USE_DEMO_MODE", "true").lower() == "true"
+
+if USE_DEMO_MODE:
+    return DEMO_SOW
+else:
+    # Real IBM Cloud logic
+    pass
+```
+
+## UI/UX Guidelines
+
+### Material-UI Theme
+```typescript
+// Use consistent colors
+const theme = {
+  critical: '#d32f2f',    // Red for critical alerts
+  high: '#f57c00',        // Orange for high risk
+  medium: '#fbc02d',      // Yellow for medium risk
+  low: '#388e3c',         // Green for low risk
+  success: '#4caf50',     // Green for success
+  info: '#2196f3',        // Blue for info
+};
+```
+
+### Component Patterns
+```typescript
+// Use Card for content sections
+<Card sx={{ mb: 2 }}>
+  <CardContent>
+    <Typography variant="h6">Section Title</Typography>
+    {/* Content */}
+  </CardContent>
+</Card>
+
+// Use LinearProgress for progress bars
+<LinearProgress 
+  variant="determinate" 
+  value={progress} 
+  sx={{ height: 10, borderRadius: 5 }}
+/>
+
+// Use Alert for notifications
+<Alert severity="error" sx={{ mb: 2 }}>
+  Critical: {message}
+</Alert>
+```
+
+## Testing Guidelines
+
+### Backend Tests
+```python
+# Use pytest for testing
+import pytest
+from fastapi.testclient import TestClient
+
+def test_get_risk_report():
+    response = client.get("/api/v1/sow/SOW-2024-ACME-001/risk-report")
+    assert response.status_code == 200
+    assert response.json()["success"] is True
+```
+
+### Frontend Tests
+```typescript
+// Use React Testing Library
+import { render, screen } from '@testing-library/react';
+
+test('renders risk report', () => {
+  render(<RiskReport sowId="SOW-2024-ACME-001" />);
+  expect(screen.getByText(/Critical Alert/i)).toBeInTheDocument();
+});
+```
+
+## Git Commit Guidelines
+
+### Commit Message Format
+```
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+```
+
+### Types
+- `feat`: New feature
+- `fix`: Bug fix
+- `docs`: Documentation changes
+- `style`: Code style changes (formatting)
+- `refactor`: Code refactoring
+- `test`: Adding tests
+- `chore`: Maintenance tasks
+
+### Examples
+```
+feat(agents): implement Ingestion Agent with watsonx.ai
+
+- Parse SOW documents (PDF/DOCX)
+- Extract obligations and SLA terms
+- Calculate risk scores
+- Generate financial summary
+
+Closes #123
+```
+
+## Environment Variables
+
+### Required for Production
+```env
+# IBM Cloudant
+CLOUDANT_URL=https://xxx.cloudantnosqldb.appdomain.cloud
+CLOUDANT_API_KEY=xxx
+CLOUDANT_DB_NAME=sow-sentinel
+
+# IBM watsonx.ai
+WATSONX_API_KEY=xxx
+WATSONX_PROJECT_ID=xxx
+WATSONX_URL=https://us-south.ml.cloud.ibm.com
+
+# Integrations
+JIRA_API_KEY=xxx
+GITHUB_TOKEN=xxx
+GOOGLE_CALENDAR_API_KEY=xxx
+SLACK_WEBHOOK_URL=xxx
+
+# Demo Mode
+USE_DEMO_MODE=false
+```
+
+## Security Best Practices
+
+### Never Commit Secrets
+```python
+# ❌ Bad
+api_key = "sk-1234567890abcdef"
+
+# ✅ Good
+api_key = os.getenv("WATSONX_API_KEY")
+```
+
+### Use Environment Variables
+```python
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+CLOUDANT_URL = os.getenv("CLOUDANT_URL")
+```
+
+### Validate Input
+```python
+from pydantic import BaseModel, validator
+
+class SOWUpload(BaseModel):
+    file: bytes
+    
+    @validator('file')
+    def validate_file_size(cls, v):
+        if len(v) > 10_000_000:  # 10MB
+            raise ValueError("File too large")
+        return v
+```
+
+## Performance Guidelines
+
+### Backend
+- Use async/await for I/O operations
+- Cache frequently accessed data
+- Use connection pooling for databases
+- Implement rate limiting for APIs
+
+### Frontend
+- Use React.memo for expensive components
+- Lazy load routes with React.lazy
+- Optimize images and assets
+- Use code splitting
+
+## Documentation Guidelines
+
+### Code Comments
+```python
+def calculate_penalty_exposure(obligation: Obligation) -> float:
+    """
+    Calculate total penalty exposure for an obligation.
+    
+    Args:
+        obligation: The obligation to calculate penalty for
+        
+    Returns:
+        Total penalty amount in dollars
+        
+    Example:
+        >>> obligation = Obligation(penalty_amount=1000, days_remaining=5)
+        >>> calculate_penalty_exposure(obligation)
+        5000.0
+    """
+    return obligation.penalty_amount * obligation.days_remaining
+```
+
+### API Documentation
+```python
+@router.get("/{sow_id}/risk-report", 
+    summary="Get risk report for SOW",
+    description="Returns comprehensive risk analysis including critical alerts, penalty exposure, and recommended actions",
+    response_model=RiskReportResponse,
+    tags=["Risk Management"]
+)
+async def get_risk_report(sow_id: str):
+    pass
+```
+
+## Hackathon-Specific Guidelines
+
+### Demo Flow
+1. Start with Risk Report (the "wow" moment)
+2. Show penalty countdown timer (48 hours)
+3. Demonstrate scope creep detection
+4. Show automated actions (Jira, Calendar, Slack)
+5. Display financial impact ($9,000 penalty exposure)
+
+### Key Metrics to Highlight
+- **Revenue Protection**: $500K project value
+- **Penalty Avoidance**: $9,000 exposure detected
+- **Time Savings**: 4-hour monitoring intervals
+- **Automation**: 4 automated actions per critical alert
+
+### IBM Technology Usage
+- **watsonx.ai**: SOW document parsing and risk analysis
+- **Cloudant**: NoSQL database for document storage
+- **IBM Cloud**: Deployment platform
+- **IBM Bob**: AI coding assistant (document usage!)
+
+## Common Patterns
+
+### Agent Pattern
+```python
+class BaseAgent:
+    """Base class for all agents."""
+    
+    def __init__(self, config: dict):
+        self.config = config
+        
+    async def process(self, data: dict) -> dict:
+        """Process data and return result."""
+        raise NotImplementedError
+```
+
+### API Router Pattern
+```python
+from fastapi import APIRouter
+
+router = APIRouter(
+    prefix="/api/v1/sow",
+    tags=["SOW Management"]
+)
+
+@router.get("/list")
+async def list_sows():
+    pass
+```
+
+### React Hook Pattern
+```typescript
+const useRiskReport = (sowId: string) => {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
+  useEffect(() => {
+    fetchData();
+  }, [sowId]);
+  
+  return { data, loading, error };
+};
+```
+
+## Troubleshooting
+
+### Common Issues
+1. **Port already in use**: Kill process or use different port
+2. **Module not found**: Check virtual environment activation
+3. **CORS errors**: Verify CORS configuration in FastAPI
+4. **Hot reload not working**: Check Vite config
+
+### Debug Commands
+```bash
+# Check Python version
+python --version
+
+# Check Node version
+node --version
+
+# List running processes
+lsof -i :8000
+lsof -i :3000
+
+# Activate virtual environment
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+npm install
+```
+
+## Resources
+
+### Documentation
+- FastAPI: https://fastapi.tiangolo.com/
+- React: https://react.dev/
+- Material-UI: https://mui.com/
+- IBM watsonx.ai: https://www.ibm.com/watsonx
+- IBM Cloudant: https://cloud.ibm.com/docs/Cloudant
+
+### Project Files
+- Architecture: `ARCHITECTURE.md`
+- README: `README.md`
+- API Docs: http://localhost:8000/docs
+- Frontend: http://localhost:3000
+
+---
+
+**Remember**: SOW Sentinel is about preventing revenue leakage through intelligent automation. Every feature should contribute to this core mission: detect risks early, automate responses, and protect margins.

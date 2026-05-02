@@ -1,12 +1,13 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { ThemeProvider, createTheme, CssBaseline, Box, AppBar, Toolbar, Typography, Drawer, List, ListItem, ListItemIcon, ListItemText, ListItemButton } from '@mui/material';
-import { Dashboard as DashboardIcon, Description, Assessment, Warning, Notifications, Analytics as AnalyticsIcon } from '@mui/icons-material';
+import { Dashboard as DashboardIcon, Description, Assessment, Warning, Notifications, Analytics as AnalyticsIcon, Security as SecurityIcon } from '@mui/icons-material';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 // Pages
 import Dashboard from './pages/Dashboard';
+import RiskReport from './pages/RiskReport';
 
 const theme = createTheme({
   palette: {
@@ -24,9 +25,10 @@ const drawerWidth = 240;
 
 const menuItems = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
-  { text: 'Contracts', icon: <Description />, path: '/contracts' },
+  { text: 'Risk Report', icon: <SecurityIcon />, path: '/risk-report' },
+  { text: 'SOW Management', icon: <Description />, path: '/sows' },
   { text: 'Compliance', icon: <Assessment />, path: '/compliance' },
-  { text: 'Risks', icon: <Warning />, path: '/risks' },
+  { text: 'Scope Creep', icon: <Warning />, path: '/scope-creep' },
   { text: 'Alerts', icon: <Notifications />, path: '/alerts' },
   { text: 'Analytics', icon: <AnalyticsIcon />, path: '/analytics' },
 ];
@@ -40,8 +42,12 @@ function App() {
           {/* App Bar */}
           <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
             <Toolbar>
-              <Typography variant="h6" noWrap component="div">
-                Contract Intelligence System
+              <SecurityIcon sx={{ mr: 2 }} />
+              <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 'bold' }}>
+                SOW Sentinel
+              </Typography>
+              <Typography variant="caption" sx={{ ml: 2, color: 'rgba(255,255,255,0.7)' }}>
+                Preventing Revenue Leakage
               </Typography>
             </Toolbar>
           </AppBar>
@@ -78,9 +84,10 @@ function App() {
             <Toolbar />
             <Routes>
               <Route path="/" element={<Dashboard />} />
-              <Route path="/contracts" element={<div>Contracts - Coming Soon</div>} />
+              <Route path="/risk-report" element={<RiskReport sowId="SOW-2024-ACME-001" />} />
+              <Route path="/sows" element={<div>SOW Management - Coming Soon</div>} />
               <Route path="/compliance" element={<div>Compliance - Coming Soon</div>} />
-              <Route path="/risks" element={<div>Risks - Coming Soon</div>} />
+              <Route path="/scope-creep" element={<div>Scope Creep Detection - Coming Soon</div>} />
               <Route path="/alerts" element={<div>Alerts - Coming Soon</div>} />
               <Route path="/analytics" element={<div>Analytics - Coming Soon</div>} />
             </Routes>
