@@ -394,10 +394,12 @@ class OutlookCalendarExecutor:
 
 ## 🔮 Future Roadmap (Agentic Evolution)
 
-### Phase 1: Self-Healing Invoices
-- System blocks invoice release until all SOW milestones are "Green"
-- Auto-generates invoice with SOW milestone references
-- Flags any unbilled scope creep work
+### Phase 1: Smart Invoice Validation
+- **Auto-validate invoices** against SOW deliverables before submission
+- **Prevent payment disputes** by alerting if invoicing incomplete work
+- **Capture revenue** by flagging unbilled scope creep for change requests
+- **Auto-generate line items** with SOW milestone references for transparency
+- **Example**: "Warning: Milestone 3 is 80% complete. Invoice now may trigger client dispute. Recommend completing or adjusting invoice amount."
 
 ### Phase 2: Predictive Resourcing
 - AI predicts breach 2 weeks in advance

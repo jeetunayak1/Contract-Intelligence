@@ -219,9 +219,11 @@ The system includes demo data showing:
 
 ## 🔮 Future Roadmap
 
-### Phase 1: Self-Healing Invoices
-- Block invoice release until milestones are "Green"
-- Auto-generate invoices with SOW references
+### Phase 1: Smart Invoice Validation
+- Auto-validate invoice against SOW deliverables before submission
+- Flag unbilled scope creep work for change requests
+- Generate invoice line items with SOW milestone references
+- Alert if invoicing incomplete work (prevents payment disputes)
 
 ### Phase 2: Predictive Resourcing
 - AI predicts breach 2 weeks in advance
