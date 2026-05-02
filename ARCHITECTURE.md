@@ -46,12 +46,12 @@ Service-based companies face critical challenges:
 ┌─────────────────────────────────────────────────────────────────┐
 │  Stage 2: MAPPING AGENT (The Bridge)                            │
 │  ┌──────────────────────────────────────────────────────────┐  │
-│  │  Input: Extracted Obligations + GitHub/Jira APIs         │  │
+│  │  Input: Extracted Obligations + GitHub/Outlook APIs     │  │
 │  │  Action: Map SOW requirements to execution tools         │  │
 │  │  Examples:                                               │  │
 │  │    - "SOW Milestone 1" → "GitHub Project Board v1.0"    │  │
-│  │    - "Security Audit" → "Jira Epic SECURITY-123"        │  │
-│  │    - "Monthly Report" → "Recurring Calendar Event"      │  │
+│  │    - "Security Audit" → "GitHub Issue #123"             │  │
+│  │    - "Monthly Report" → "Recurring Outlook Event"       │  │
 │  │  Output: Linked obligations with tracking IDs           │  │
 │  └──────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
@@ -62,7 +62,7 @@ Service-based companies face critical challenges:
 │  ┌──────────────────────────────────────────────────────────┐  │
 │  │  Continuous Loop (Every 4 hours):                        │  │
 │  │  1. Compare SOW Deadline vs Git Commit Velocity         │  │
-│  │  2. Check Jira progress vs SOW milestones               │  │
+│  │  2. Check GitHub Issues progress vs SOW milestones      │  │
 │  │  3. Scan Slack/Email for undocumented change requests   │  │
 │  │  4. Calculate "Days to Penalty" for each obligation     │  │
 │  │  5. Detect scope creep (work not in SOW)                │  │
@@ -75,8 +75,8 @@ Service-based companies face critical challenges:
 │  Stage 4: EXECUTIVE AGENT (The Actor)                           │
 │  ┌──────────────────────────────────────────────────────────┐  │
 │  │  Automated Actions:                                       │  │
-│  │  1. Create Jira tasks for upcoming SOW deliverables     │  │
-│  │  2. Schedule Google Calendar "Pre-Delivery Reviews"     │  │
+│  │  1. Create GitHub Issues for upcoming SOW deliverables  │  │
+│  │  2. Schedule Outlook Calendar "Pre-Delivery Reviews"    │  │
 │  │  3. Send Slack nudges for SLA deadline warnings         │  │
 │  │  4. Generate "Definition of Done" checklists            │  │
 │  │  5. Auto-format status reports per SOW requirements     │  │
@@ -160,7 +160,7 @@ Service-based companies face critical challenges:
       "status": "in_progress",
       "mapped_to": {
         "github_project": "acme-migration",
-        "jira_epic": "ACME-123"
+        "github_issue": 123
       }
     }
   ],
@@ -200,8 +200,8 @@ Service-based companies face critical challenges:
   "predicted_completion": "2024-05-15",
   "penalty_exposure": 25000,
   "actions_taken": [
-    "Created Jira task URGENT-456",
-    "Scheduled team sync for tomorrow",
+    "Created GitHub Issue #456 (URGENT)",
+    "Scheduled Outlook meeting for tomorrow",
     "Sent Slack alert to PM"
   ],
   "timestamp": "2024-05-02T10:30:00Z"
@@ -219,7 +219,7 @@ Service-based companies face critical challenges:
     "hours_spent": 40,
     "cost": 10000,
     "github_commits": ["abc123", "def456"],
-    "jira_tickets": ["ACME-789"]
+    "github_issues": [789]
   },
   "sow_match": null,
   "recommendation": "Create Change Request CR-2024-05",
@@ -254,49 +254,71 @@ class GitHubMonitor:
             }
 ```
 
-### Jira Integration
+### GitHub Issues Integration
 ```python
-# Auto-create tasks from SOW obligations
-class JiraExecutor:
-    def create_compliance_tasks(self, sow_obligation):
-        # Create epic for major deliverable
-        epic = jira_api.create_epic(
+# Auto-create issues from SOW obligations
+class GitHubIssuesExecutor:
+    def create_compliance_issues(self, sow_obligation):
+        # Create issue for major deliverable
+        issue = github_api.create_issue(
             title=f"SOW: {obligation.description}",
-            due_date=obligation.deadline,
-            custom_fields={
-                "penalty_amount": obligation.penalty_amount,
-                "sow_reference": obligation.id
-            }
+            body=f"""
+            **SOW Reference**: {obligation.id}
+            **Deadline**: {obligation.deadline}
+            **Penalty**: ${obligation.penalty_amount}/{obligation.penalty_frequency}
+            **Risk Level**: {obligation.risk_level}
+            
+            {obligation.description}
+            """,
+            labels=["sow-compliance", f"risk-{obligation.risk_level}"],
+            milestone=obligation.milestone,
+            assignees=obligation.team_members
         )
         
-        # Create pre-delivery review task
+        # Create pre-delivery review issue
         review_date = obligation.deadline - timedelta(days=2)
-        jira_api.create_task(
+        github_api.create_issue(
             title=f"Pre-Delivery Review: {obligation.description}",
-            due_date=review_date,
-            parent=epic.id
+            body=f"Review checklist before {obligation.deadline}",
+            labels=["review", "sow-compliance"],
+            assignees=["pm", "tech-lead"]
         )
 ```
 
-### Google Calendar Integration
+### Outlook Calendar Integration
 ```python
-# Auto-schedule compliance checkpoints
-class CalendarExecutor:
+# Auto-schedule compliance checkpoints via Microsoft Graph API
+class OutlookCalendarExecutor:
     def schedule_compliance_events(self, sow_obligation):
         # Pre-delivery review
-        calendar_api.create_event(
-            title=f"SOW Compliance Review: {obligation.description}",
-            start=obligation.deadline - timedelta(days=2),
-            duration=60,
-            attendees=["pm@company.com", "tech-lead@company.com"],
-            description=f"Review checklist:\n{obligation.checklist}"
+        graph_api.create_event(
+            subject=f"SOW Compliance Review: {obligation.description}",
+            start={
+                "dateTime": (obligation.deadline - timedelta(days=2)).isoformat(),
+                "timeZone": "UTC"
+            },
+            end={
+                "dateTime": (obligation.deadline - timedelta(days=2, hours=-1)).isoformat(),
+                "timeZone": "UTC"
+            },
+            attendees=[
+                {"emailAddress": {"address": "pm@company.com"}},
+                {"emailAddress": {"address": "tech-lead@company.com"}}
+            ],
+            body={
+                "contentType": "HTML",
+                "content": f"<h3>Review Checklist</h3><p>{obligation.checklist}</p>"
+            }
         )
         
         # Weekly progress sync
-        calendar_api.create_recurring_event(
-            title=f"SOW Progress: {obligation.description}",
-            frequency="weekly",
-            duration=30
+        graph_api.create_recurring_event(
+            subject=f"SOW Progress: {obligation.description}",
+            recurrence={
+                "pattern": {"type": "weekly", "interval": 1},
+                "range": {"type": "endDate", "endDate": obligation.deadline}
+            },
+            duration="PT30M"
         )
 ```
 
@@ -308,7 +330,7 @@ class CalendarExecutor:
 
 1. **Critical (Red) - Immediate Action Required**
    - Trigger: < 24 hours to penalty
-   - Action: Slack DM to PM + CEO, Create P0 Jira ticket
+   - Action: Slack DM to PM + CEO, Create P0 GitHub Issue
    - Example: "URGENT: UAT sign-off due in 18 hours. $5,000/day penalty starts tomorrow."
 
 2. **High (Orange) - Urgent Attention**
@@ -361,8 +383,8 @@ class CalendarExecutor:
 **Visual**: Executive Agent in action
 
 **Screen Shows**:
-- Jira task auto-created: "Complete UAT Documentation"
-- Calendar invite sent: "Pre-Delivery Review - Thursday 2 PM"
+- GitHub Issue auto-created: #456 "Complete UAT Documentation"
+- Outlook meeting scheduled: "Pre-Delivery Review - Thursday 2 PM"
 - Slack message: "Reminder: UAT sign-off due Friday"
 - GitHub PR checklist: "Security audit required per SOW Section 8.4"
 
@@ -405,7 +427,7 @@ class CalendarExecutor:
 - **Document Processing**: Watson Discovery
 - **Database**: IBM Cloudant (NoSQL)
 - **Task Queue**: Celery + Redis
-- **APIs**: GitHub, Jira, Google Calendar, Slack
+- **APIs**: GitHub (Issues & Projects), Microsoft Graph (Outlook), Slack
 
 ### Frontend (React)
 - **Framework**: React 18 + TypeScript
@@ -464,8 +486,9 @@ CRITICAL: Penalty Clause 5.2 active
 - Deliverable: UAT Sign-off Document
 - Deadline: May 15th, 2024 (48 hours)
 - Penalty: $1,000/day after deadline
-- Action: Schedule emergency review meeting
+- Action: Schedule emergency review meeting (Outlook)
 - Blocker: Security audit pending
+- GitHub Issue: #456
 ```
 
 ### Operational Tasks
@@ -475,14 +498,14 @@ RECURRING: Bi-Weekly Progress Call
 - Frequency: Every 2 weeks
 - Attendees: PM, Tech Lead, Client Stakeholder
 - Agenda: Milestone progress, risk review
-- Calendar: Auto-scheduled
+- Outlook Calendar: Auto-scheduled recurring meeting
 ```
 
 ### Technical Tasks
 ```
 REQUIREMENT: Data Encryption at Rest
 - SOW Reference: Security Clause 8.4
-- GitHub Issue: Created as SECURITY-789
+- GitHub Issue: #789
 - Definition of Done:
   ✓ Implement AES-256 encryption
   ✓ Document key management
@@ -521,7 +544,7 @@ npm run dev
 ### For Business Users
 1. Upload your SOW (PDF/DOCX)
 2. Review extracted obligations
-3. Connect GitHub/Jira/Calendar
+3. Connect GitHub Issues & Outlook Calendar
 4. Monitor the Loss Prevention Dashboard
 5. Let the agents handle compliance
 

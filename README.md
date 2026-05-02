@@ -27,7 +27,7 @@ Service companies lose millions annually through:
 **SOW Sentinel** is an agentic AI system that:
 
 1. **Reads** complex SOW documents and extracts obligations
-2. **Maps** SOW requirements to execution tools (GitHub/Jira/Calendar)
+2. **Maps** SOW requirements to execution tools (GitHub Issues/Outlook Calendar)
 3. **Monitors** compliance in real-time
 4. **Alerts** stakeholders before breaches occur
 5. **Protects** margins by detecting scope creep
@@ -58,9 +58,9 @@ Service companies lose millions annually through:
                           ↓
 ┌─────────────────────────────────────────────────────────────┐
 │  2. MAPPING AGENT (The Bridge)                              │
-│     • Links SOW obligations to GitHub/Jira                  │
+│     • Links SOW obligations to GitHub Issues                │
 │     • Creates tracking relationships                        │
-│     • Syncs deadlines with calendars                        │
+│     • Syncs deadlines with Outlook Calendar                 │
 └─────────────────────────────────────────────────────────────┘
                           ↓
 ┌─────────────────────────────────────────────────────────────┐
@@ -72,8 +72,8 @@ Service companies lose millions annually through:
                           ↓
 ┌─────────────────────────────────────────────────────────────┐
 │  4. EXECUTIVE AGENT (The Actor)                             │
-│     • Creates Jira tasks automatically                      │
-│     • Schedules calendar reviews                            │
+│     • Creates GitHub Issues automatically                   │
+│     • Schedules Outlook Calendar reviews                    │
 │     • Sends Slack/email alerts                              │
 │     • Generates status reports                              │
 └─────────────────────────────────────────────────────────────┘
@@ -163,9 +163,8 @@ The system includes demo data showing:
 - **State Management**: Redux Toolkit
 
 ### Integrations
-- GitHub API (commit tracking)
-- Jira API (task management)
-- Google Calendar API (scheduling)
+- GitHub API (commit tracking & issue management)
+- Microsoft Graph API (Outlook Calendar scheduling)
 - Slack API (notifications)
 
 ---
@@ -210,8 +209,8 @@ The system includes demo data showing:
 ### 3. Auto-Execution
 ```
 ✅ Actions Taken:
-   • Created Jira task: URGENT-456
-   • Scheduled review: Thursday 2 PM
+   • Created GitHub Issue: #456 (URGENT)
+   • Scheduled Outlook meeting: Thursday 2 PM
    • Sent Slack alert to PM
    • Generated PR checklist
 ```
