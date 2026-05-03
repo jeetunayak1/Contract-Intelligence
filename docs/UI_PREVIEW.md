@@ -1,238 +1,358 @@
-# UI Preview - Contract Intelligence System
+# UI Preview - SOW Sentinel
 
-## Dashboard Overview
+## Overview
 
-The UI has been designed with a modern, professional interface using Material-UI components. Here's what you'll see:
+The current UI is designed as a contract-governance workspace for delivery teams. Instead of a generic compliance dashboard, the product now centers on **SOW review, numeric risk visibility, human decisioning, and approved action execution**.
+
+The interface uses Material UI and is intended to support a clean hackathon demo story:
+- upload a SOW
+- review AI findings
+- inspect financial and SLA exposure
+- accept, reject, or clear the review
+- execute approved actions
 
 ---
 
 ## Main Layout
 
-### **Header (Top Bar)**
-- **Title:** "Contract Intelligence System"
-- **Color:** Primary blue (#1976d2)
-- **Fixed position** at the top
+### Top Bar
+- Product title: **SOW Sentinel**
+- Supporting tagline: **Preventing Revenue Leakage**
+- Primary blue app bar for a clean enterprise look
 
-### **Sidebar (Left Navigation)**
-- **Width:** 240px
-- **Menu Items:**
-  1. 📊 Dashboard
-  2. 📄 Contracts
-  3. 📈 Compliance
-  4. ⚠️ Risks
-  5. 🔔 Alerts
-  6. 📊 Analytics
+### Left Navigation
+Current navigation includes:
+1. Dashboard
+2. Risk Report
+3. Integration Setup
+4. API Settings
+5. SOW Management
+6. Compliance
+7. Scope Creep
+8. Alerts
+9. Analytics
 
----
-
-## Dashboard Page
-
-### **Header Section**
-```
-Contract Intelligence Dashboard
-Real-time SLA monitoring and compliance tracking
-```
-
-### **Stats Cards (4 Cards in a Row)**
-
-**Card 1: Total Contracts**
-- Icon: 📄 Document icon
-- Number: 24
-- Subtitle: "18 active"
-
-**Card 2: SLA Compliance**
-- Icon: ✅ Check circle (green)
-- Number: 95.8%
-- Progress bar: Green, showing 95.8%
-
-**Card 3: Expiring Soon**
-- Icon: ⚠️ Warning (orange)
-- Number: 3
-- Subtitle: "Within 30 days"
-
-**Card 4: Critical Alerts**
-- Icon: ❌ Error (red)
-- Number: 2
-- Subtitle: "5 high risks"
+The navigation is optimized to make **SOW Management** the operational center of the product.
 
 ---
 
-### **Main Content (2 Columns)**
+## Primary Working Screen: SOW Management
 
-#### **Left Column: Recent Alerts**
+This is the main demo page and the most important UI in the project.
 
-**Alert 1 (Critical - Red)**
-```
-⚠️ SLA Breach Imminent
-Contract: CTR-2024-001 • 5 minutes ago
-```
+### Header Area
+Shows:
+- page title: **SOW Management**
+- workflow description focused on upload, review, risk, approval, and execution
 
-**Alert 2 (High - Orange)**
-```
-⚠️ Response Time Threshold
-Contract: CTR-2024-015 • 1 hour ago
-```
+### Summary Cards
+At the top of the page, the user sees key metrics such as:
+- active SOWs
+- at-risk obligations
+- critical alerts
+- total penalty exposure
 
-**Alert 3 (Medium - Blue)**
-```
-⚠️ Contract Renewal Due
-Contract: CTR-2024-008 • 3 hours ago
-```
-
-#### **Right Column: Compliance Overview**
-
-**System Uptime**
-- Progress: 99.95% (Green bar)
-
-**Response Time**
-- Progress: 98.2% (Green bar)
-
-**Resolution Time**
-- Progress: 92.5% (Orange bar)
+These metrics make the business impact visible immediately.
 
 ---
 
-### **Risk Summary (Full Width)**
+## Tab 1: Upload New SOW
 
-Four colored boxes showing risk distribution:
+### Upload Form
+The upload flow includes:
+- SOW number
+- client name
+- project name
+- document picker for PDF / DOC / DOCX / TXT
 
-**Critical Risks (Red)**
-- Number: 2
-- Background: Light red
+### Upload Action
+The user can trigger **Upload & Analyze**, which starts the backend workflow:
+- parse SOW
+- derive risks
+- create alerts
+- create action items
+- persist review package
 
-**High Risks (Orange)**
-- Number: 5
-- Background: Light orange
-
-**Medium Risks (Blue)**
-- Number: 8
-- Background: Light blue
-
-**Low Risks (Green)**
-- Number: 12
-- Background: Light green
-
----
-
-## Color Scheme
-
-### **Primary Colors:**
-- **Primary Blue:** #1976d2 (Header, links)
-- **Success Green:** #2e7d32 (Compliant metrics)
-- **Warning Orange:** #ed6c02 (At-risk items)
-- **Error Red:** #d32f2f (Critical alerts)
-- **Info Blue:** #0288d1 (Medium priority)
-
-### **Background:**
-- **Main:** #fafafa (Light gray)
-- **Cards:** #ffffff (White)
-- **Sidebar:** #ffffff (White)
+### Upload UX Goal
+This section should feel like the start of a governed business workflow rather than a file-import utility.
 
 ---
 
-## Typography
+## Tab 2: Review Saved SOWs
 
-- **Headers:** Roboto, Bold
-- **Body:** Roboto, Regular
-- **Numbers:** Roboto, Bold, Large
+### Saved SOW List
+The left panel shows saved SOW cards with:
+- project name
+- client and SOW number
+- risk chip
+- review status chip
 
----
+This lets the user reopen previously analyzed SOWs later.
 
-## Responsive Design
+### Selected SOW Detail
+The right panel displays the saved review package:
+- project identity
+- risk score
+- penalty exposure
+- alert count
+- action item count
 
-- **Desktop (>960px):** Full layout with sidebar
-- **Tablet (600-960px):** Stacked cards, 2 columns
-- **Mobile (<600px):** Single column, collapsible sidebar
-
----
-
-## Interactive Elements
-
-### **Hover Effects:**
-- Sidebar items: Light blue background
-- Cards: Subtle shadow increase
-- Buttons: Color darkening
-
-### **Progress Bars:**
-- Animated on load
-- Color-coded by status
-- Smooth transitions
+This makes the system feel persistent and audit-ready.
 
 ---
 
-## To See the UI:
+## Agent Summary Section
 
-### **Option 1: Run Locally**
+The Agent Summary provides three grouped views:
+
+### Ingestion Findings
+Summarizes:
+- obligations count
+- SLA terms count
+- vague clauses count
+
+### Risk Findings
+Summarizes:
+- overall risk level
+- total penalty exposure
+- high-risk obligations
+
+### Executive Recommendations
+Summarizes:
+- alerts generated
+- action items generated
+- scope creep indicators
+
+This section helps explain the value of the agent pipeline during the pitch.
+
+---
+
+## Alerts Section
+
+The Alerts area is designed to showcase urgency and business value.
+
+Typical information shown:
+- alert title
+- business-readable message
+- severity
+- penalty exposure
+- time remaining
+- recommended actions
+
+This is one of the best places to demonstrate:
+- SLA awareness
+- financial risk visibility
+- proactive warning before breach
+
+---
+
+## Action Items Section
+
+The Action Items section is where the product shifts from insight to execution.
+
+Each action item can show:
+- title
+- description
+- severity / priority
+- approval state
+- execution state
+- recommended owner
+- workflow stage
+- action type
+- execution targets
+- SLA reference
+- numeric risk chips
+
+### Numeric Risk Display
+Users may see values such as:
+- penalty amount
+- days remaining
+- hours until penalty
+- revenue at stake
+- total exposure
+- risk score
+
+### Execution Controls
+Action items can expose buttons to:
+- create GitHub items
+- schedule meetings
+- execute stage-aware operational tasks
+
+This is critical to the hackathon story because it proves the system goes beyond passive reporting.
+
+---
+
+## Timeline Section
+
+The Timeline shows event history for a saved SOW:
+- upload completed
+- analysis completed
+- review decision saved
+- actions executed
+
+This supports auditability and demonstrates that the platform preserves decision history over time.
+
+---
+
+## Review Decision & Actions Section
+
+This is the most important business-governance control in the UI.
+
+The user can:
+- add review notes
+- **Accept SOW**
+- **Reject SOW**
+- **Clear Review**
+- **Take Actions / Execute Approved Actions**
+
+### Why this matters
+This section communicates the core product philosophy:
+- AI recommends
+- humans decide
+- systems execute only after approval
+
+That makes the workflow safer and more enterprise-ready.
+
+---
+
+## Risk Report Page
+
+The Risk Report page supports the visual storytelling side of the demo.
+
+It is useful for:
+- surfacing critical issues quickly
+- highlighting penalty exposure
+- showing a “wow moment” around SLA risk
+- framing why the SOW workflow matters operationally
+
+Use this page when you want to open the demo with urgency, then move into SOW Management to show control and execution.
+
+---
+
+## Dashboard
+
+The Dashboard is intended to summarize the overall health of the SOW portfolio.
+
+Expected themes:
+- active delivery risk
+- number of critical alerts
+- penalty exposure
+- trend toward revenue protection
+
+This works best as the executive entry point before drilling into individual SOWs.
+
+---
+
+## Integration Setup
+
+The Integration Setup area supports SOW-scoped operational configuration.
+
+It is where the user can frame how approved work should be routed:
+- GitHub targets
+- calendar / Outlook-style scheduling details
+- other collaboration system mappings
+
+This is important because the system is not just identifying work; it is preparing where that work should go.
+
+---
+
+## Design Language
+
+### Colors
+- **Primary Blue**: app identity and navigation emphasis
+- **Error Red**: critical financial or SLA risk
+- **Warning Orange**: at-risk items and pending deadlines
+- **Info Blue**: medium-priority indicators
+- **Success Green**: approved / healthy states
+
+### Typography
+- bold headings for key business sections
+- readable body text for contract and alert summaries
+- large numeric cards for risk and exposure metrics
+
+### Card-Driven Layout
+The UI uses cards heavily to:
+- isolate business concepts
+- keep the interface scannable
+- make the product demo-friendly
+
+---
+
+## Responsive Intent
+
+The UI is designed to adapt across:
+- desktop
+- tablet
+- mobile
+
+### Desktop
+Best experience for full demo:
+- persistent sidebar
+- multi-column review layout
+- card-based analytics view
+
+### Tablet / Smaller Screens
+- stacked content
+- reduced horizontal density
+- preserved access to core decision actions
+
+---
+
+## Demo Walkthrough Recommendation
+
+For the strongest demo:
+
+1. Open **Risk Report** to establish urgency
+2. Move to **SOW Management**
+3. Upload a sample SOW
+4. Open the saved SOW review package
+5. Highlight alerts and penalty exposure
+6. Show action items with SLA references and risk chips
+7. Accept or reject the review package
+8. Execute approved actions
+9. Show the timeline for auditability
+
+This sequence lands both the technical and business story.
+
+---
+
+## Current Reality
+
+The current UI has moved beyond a mock dashboard. It now reflects a more realistic governed workflow:
+- persisted SOWs
+- live review packages
+- numeric risk
+- approval controls
+- execution triggers
+
+Some screens still retain demo-friendly assumptions, but the main interaction model is now aligned with the product vision.
+
+---
+
+## Run Locally
+
 ```bash
 cd frontend
 npm install
-npm run dev
+npm run dev -- --host 0.0.0.0
 ```
-Then open: http://localhost:3000
 
-### **Option 2: View Screenshots**
-Once you run the app, you'll see:
-- Clean, modern dashboard
-- Real-time metrics
-- Color-coded alerts
-- Interactive charts
-- Professional layout
+Then open the Vite URL shown in the terminal, commonly:
+- `http://localhost:5173`
+
+Backend should also be running:
+- `http://localhost:8000`
 
 ---
 
-## Future Pages (Coming Soon)
+## UI Summary
 
-### **Contracts Page**
-- List of all contracts
-- Upload new contracts
-- View contract details
-- Filter and search
+SOW Sentinel’s UI is designed to answer five questions quickly:
 
-### **Compliance Page**
-- Detailed SLA metrics
-- Historical trends
-- Compliance reports
-- Export functionality
+1. What risk exists in this SOW?
+2. How much money is exposed?
+3. What actions should be taken?
+4. Has a human approved those actions?
+5. What has already been executed?
 
-### **Risks Page**
-- Risk heatmap
-- Risk details
-- Mitigation recommendations
-- Financial impact
-
-### **Alerts Page**
-- All alerts list
-- Filter by severity
-- Acknowledge/resolve
-- Alert history
-
-### **Analytics Page**
-- Trend charts
-- Forecasting
-- Financial analysis
-- Custom reports
-
----
-
-## UI Features
-
-✅ **Modern Design** - Clean, professional Material-UI  
-✅ **Responsive** - Works on all devices  
-✅ **Color-Coded** - Easy to identify priorities  
-✅ **Real-Time** - Live data updates  
-✅ **Interactive** - Smooth animations  
-✅ **Accessible** - WCAG compliant  
-
----
-
-## Mock Data
-
-Currently using mock data for demonstration. Once backend is connected:
-- Real contract data from Cloudant
-- Live SLA metrics
-- Actual alerts and risks
-- Historical trends
-
----
-
-**The UI is ready to run!** Just install dependencies and start the dev server to see it in action.
+That makes the interface not just attractive for a hackathon demo, but meaningful for real delivery governance.

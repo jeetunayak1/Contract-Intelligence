@@ -2,229 +2,348 @@
 
 ## 🎯 Project Vision
 
-**SOW Sentinel** is an AI-powered agentic system that prevents service companies from losing money through contract breaches, scope creep, and missed SLA deadlines. It reads complex Statements of Work (SOWs), extracts obligations, and connects to execution tools (GitHub/Jira/Calendar) to ensure compliance and protect margins.
+**SOW Sentinel** is an AI-powered governed execution system for service companies. It prevents revenue leakage, contract breaches, and SLA misses by turning long-form Statements of Work into reviewed, traceable, and executable operational work.
+
+The platform does not stop at extraction. It connects:
+
+**contract understanding** → **risk analysis** → **human review** → **approved execution**
+
+This makes it especially suited for delivery teams that need both automation and control.
 
 ---
 
 ## 💡 The Core Problem
 
-Service-based companies face critical challenges:
+Service-based companies face the same pattern repeatedly:
 
-1. **Revenue Leakage**: Teams work on out-of-scope tasks without billing
-2. **Financial Penalties**: Missing SLA deadlines triggers Liquidated Damages (LDs)
-3. **Contract Breaches**: Vague SOW clauses lead to disputes and lost revenue
-4. **Margin Erosion**: Scope creep eats into profitability
-5. **Manual Tracking**: No automated way to monitor SOW compliance
+1. **Revenue Leakage**  
+   Teams perform work outside the SOW and fail to capture billable change requests.
 
-**Real Impact**: A single missed milestone can cost $1,000-$10,000 per day in penalties.
+2. **Financial Penalties**  
+   Missing delivery milestones or SLA obligations triggers liquidated damages.
+
+3. **Contract Breaches**  
+   Vague language and hidden obligations create avoidable compliance failures.
+
+4. **Margin Erosion**  
+   Delivery commitments expand faster than tracked revenue.
+
+5. **Execution Gaps**  
+   Teams may understand the risk but still fail to operationalize corrective actions.
+
+6. **Weak Auditability**  
+   When issues occur, there is no clean trail showing what was identified, approved, or executed.
+
+**Business reality**: winning the contract is not enough; teams must govern delivery against the contract continuously.
 
 ---
 
-## 🏗️ System Architecture: 4-Stage Agentic Pipeline
+## 🏗️ System Architecture: Upload → Analyze → Review → Decide → Execute
 
+```text
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                              SOW Sentinel System                            │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  1. SOW Upload Layer                                                        │
+│  - User uploads PDF / DOC / DOCX / TXT SOW                                  │
+│  - Captures SOW number, client, project metadata                            │
+│  - Hands file to backend workflow                                           │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  2. Ingestion Agent                                                         │
+│  - Reads the SOW                                                            │
+│  - Extracts obligations, SLA clauses, deadlines, vague terms                │
+│  - Produces normalized contract structure                                   │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  3. Monitoring Agent                                                        │
+│  - Computes compliance indicators                                           │
+│  - Estimates penalty and delivery exposure                                  │
+│  - Detects scope creep and revenue leakage signals                          │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  4. Executive Agent                                                         │
+│  - Converts findings into alerts                                            │
+│  - Generates business-friendly action items                                 │
+│  - Separates pre-acceptance vs post-approval work                           │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  5. Persisted Review Package                                                │
+│  Saved to Cloudant with:                                                    │
+│  - analysis_status                                                          │
+│  - review_status                                                            │
+│  - risk_assessment                                                          │
+│  - alerts                                                                   │
+│  - action_items                                                             │
+│  - scope_creep_items                                                        │
+│  - approval_history                                                         │
+│  - integration_execution                                                    │
+│  - timeline_events                                                          │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  6. Human Review & Decision Layer                                           │
+│  - Reviewer reopens saved SOW later                                         │
+│  - Accepts, rejects, or clears the package                                  │
+│  - Notes and decisions are persisted                                        │
+│  - Timeline preserves auditability                                          │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  7. Execution Layer                                                         │
+│  - Approved actions are operationalized                                     │
+│  - Pre-acceptance tasks can go to review repos / meetings                   │
+│  - Post-approval tasks can go to delivery repos / coordination workflows    │
+│  - Execution artifacts are saved back to the SOW                            │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                     SOW Sentinel System                          │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  Stage 1: INGESTION AGENT (The Reader)                          │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │  Input: PDF/DOCX SOW                                      │  │
-│  │  Action: Extract Obligations using watsonx.ai            │  │
-│  │  Output: Structured JSON with:                           │  │
-│  │    - Deliverables & Milestones                           │  │
-│  │    - SLA Metrics (response/resolution times)             │  │
-│  │    - Financial Penalties (LDs)                           │  │
-│  │    - Dates & Deadlines                                   │  │
-│  │  Risk Scoring: Tag as "Vague", "High Financial Risk"     │  │
-│  └──────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  Stage 2: MAPPING AGENT (The Bridge)                            │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │  Input: Extracted Obligations + GitHub/Outlook APIs     │  │
-│  │  Action: Map SOW requirements to execution tools         │  │
-│  │  Examples:                                               │  │
-│  │    - "SOW Milestone 1" → "GitHub Project Board v1.0"    │  │
-│  │    - "Security Audit" → "GitHub Issue #123"             │  │
-│  │    - "Monthly Report" → "Recurring Outlook Event"       │  │
-│  │  Output: Linked obligations with tracking IDs           │  │
-│  └──────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  Stage 3: MONITORING AGENT (The Watchman)                       │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │  Continuous Loop (Every 4 hours):                        │  │
-│  │  1. Compare SOW Deadline vs Git Commit Velocity         │  │
-│  │  2. Check GitHub Issues progress vs SOW milestones      │  │
-│  │  3. Scan Slack/Email for undocumented change requests   │  │
-│  │  4. Calculate "Days to Penalty" for each obligation     │  │
-│  │  5. Detect scope creep (work not in SOW)                │  │
-│  │  Output: Real-time compliance status & alerts           │  │
-│  └──────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  Stage 4: EXECUTIVE AGENT (The Actor)                           │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │  Automated Actions:                                       │  │
-│  │  1. Create GitHub Issues for upcoming SOW deliverables  │  │
-│  │  2. Schedule Outlook Calendar "Pre-Delivery Reviews"    │  │
-│  │  3. Send Slack nudges for SLA deadline warnings         │  │
-│  │  4. Generate "Definition of Done" checklists            │  │
-│  │  5. Auto-format status reports per SOW requirements     │  │
-│  │  6. Block invoice release if milestones not met         │  │
-│  └──────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
+
+---
+
+## 🧠 Agent Roles
+
+### 1. Ingestion Agent - The Reader
+**Responsibilities**
+- parse uploaded SOW documents
+- extract deliverables, milestones, obligations, and SLA terms
+- flag vague or risky contractual language
+- normalize results into structured JSON
+
+**Current state**
+- integrated into upload flow
+- accepts watsonx-related configuration
+- still contains demo/placeholder parsing behavior in parts of the path
+
+---
+
+### 2. Monitoring Agent - The Watchman
+**Responsibilities**
+- derive compliance risk indicators
+- estimate penalty exposure
+- identify margin leakage and scope creep patterns
+- support future continuous monitoring over delivery signals
+
+**Current state**
+- used during review package generation
+- supports review-time findings
+- continuous recurring monitoring is still a pending enhancement
+
+---
+
+### 3. Executive Agent - The Actor
+**Responsibilities**
+- generate business-friendly alerts
+- create recommended actions with ownership
+- shape findings into human-reviewable operational packages
+- support escalation logic for critical items
+
+**Current state**
+- contributes to alert and action generation
+- downstream execution is approval-driven
+- some execution behavior remains demo-oriented
+
+---
+
+### 4. Execution / Mapping Layer - The Bridge
+**Responsibilities**
+- route approved work into GitHub and scheduling systems
+- maintain SOW-scoped operational isolation
+- preserve SOW → action → execution traceability
+
+**Current state**
+- supports per-SOW integration modeling
+- stage-aware execution behavior exists
+- deeper real-world validation is still pending
+
+---
+
+## 🎨 Product Flows
+
+### A. Upload and Analyze
+
+```text
+Upload SOW
+  -> parse contract
+  -> extract obligations / SLA terms / vague clauses
+  -> score risk and exposure
+  -> generate alerts and action items
+  -> save review package
+```
+
+### B. Review Later
+
+```text
+Open saved SOW
+  -> fetch persisted review package
+  -> inspect risk, alerts, action items, timeline
+  -> understand numeric exposure before deciding
+```
+
+### C. Review Decision
+
+```text
+Reviewer chooses one of:
+  -> accept
+  -> reject
+  -> clear
+
+Then:
+  -> decision is persisted
+  -> approval history is updated
+  -> timeline event is added
+  -> action states are adjusted
+```
+
+### D. Execute Approved Actions
+
+```text
+Approved actions
+  -> check workflow stage
+  -> use SOW-scoped integration configuration
+  -> create GitHub issues or meeting actions
+  -> save execution status and artifacts
+  -> expose results back in UI and timeline
 ```
 
 ---
 
-## 🎨 Key Features
+## 🔄 Stage-Aware Operating Model
 
-### A. Loss Prevention Dashboard
+### Pre-Acceptance Stage
+This stage is for work that should happen **before the SOW is fully accepted or signed off for delivery**.
 
-**Purpose**: Real-time visibility into financial risks
+Typical goals:
+- validate risky SLA commitments
+- challenge vague or ambiguous clauses
+- create review items in GitHub
+- schedule executive or PM review meetings
+- force visibility into exposure before acceptance
 
-**Components**:
+### Post-Approval Stage
+This stage is for work that should happen **after the SOW is approved for operational delivery**.
 
-1. **Penalty Countdown Timer**
-   - Live countdown to next LD trigger
-   - Shows: "48 hours until $5,000 penalty"
-   - Color-coded: Green (safe), Yellow (warning), Red (critical)
+Typical goals:
+- launch delivery-governance tasks
+- create implementation-tracking items in delivery repositories
+- coordinate follow-up execution work
+- preserve SLA references and ownership throughout delivery
 
-2. **Margin Leakage Alert**
-   - Detects out-of-scope work
-   - Shows: "Team spent 15 hours on Feature X (not in SOW)"
-   - Calculates lost revenue: "Unbilled work = $3,750"
-
-3. **SLA Heatmap**
-   - Visual grid of all SLA metrics
-   - Green: Compliant, Yellow: At risk, Red: Breached
-   - Metrics: Response time, Resolution time, Uptime
-
-4. **Financial Risk Score**
-   - Overall project health: 0-100
-   - Factors: Deadline proximity, velocity, scope creep
-   - Predictive: "85% chance of penalty in 2 weeks"
-
-### B. Automation & Execution
-
-1. **Smart Calendar Invites**
-   - Auto-schedule "Pre-Delivery Review" 48h before milestone
-   - Include: Checklist, stakeholders, SOW reference
-
-2. **Auto-Action Items**
-   - Generate "Definition of Done" from SOW technical requirements
-   - Create GitHub PR templates with compliance checks
-
-3. **Status Report Generator**
-   - One-click report generation
-   - Pulls: Git commits, Jira progress, test results
-   - Formats per SOW's required structure
-
-4. **Scope Creep Detector**
-   - Flags work not mapped to SOW
-   - Suggests: "Create Change Request for Feature Y"
+This staged separation is important because it prevents the system from creating implementation work too early.
 
 ---
 
-## 📊 Data Models
+## 📊 Key Features
 
-### SOW Document (Cloudant)
+### 1. Persisted Review Package
+Every uploaded SOW becomes a durable review object containing:
+- obligations
+- vague clauses
+- SLA terms
+- risk assessment
+- alerts
+- action items
+- timeline
+- approval history
+- execution history
+
+### 2. Human-in-the-Loop Governance
+The system does not blindly automate high-impact actions. It:
+- recommends
+- waits for human decision
+- executes only approved work
+
+### 3. Numeric Financial Risk
+The system can surface:
+- risk scores
+- total penalty exposure
+- per-alert or per-action exposure
+- days/hours until penalty conditions
+- potential revenue at risk
+
+### 4. SOW-Scoped Execution
+Each SOW can be routed independently to:
+- a GitHub review destination
+- a delivery destination
+- scheduling / coordination targets
+- SOW-specific labels and references
+
+### 5. Auditability
+Timeline and history allow users to see:
+- when the SOW was uploaded
+- when analysis completed
+- when it was accepted, rejected, or cleared
+- when downstream work was executed
+
+---
+
+## 📦 Persisted Data Model
+
+### SOW Document (Conceptual)
+
 ```json
 {
   "_id": "SOW-2024-ACME-001",
   "type": "sow",
+  "sow_number": "2024-ACME-001",
   "client_name": "Acme Corp",
   "project_name": "Enterprise Platform Migration",
-  "start_date": "2024-01-01",
-  "end_date": "2024-12-31",
-  "total_value": 500000,
-  "obligations": [
-    {
-      "id": "OBL-001",
-      "type": "deliverable",
-      "description": "Phase 1: Database Migration",
-      "deadline": "2024-03-31",
-      "penalty_amount": 5000,
-      "penalty_frequency": "per_day",
-      "risk_level": "high",
-      "status": "in_progress",
-      "mapped_to": {
-        "github_project": "acme-migration",
-        "github_issue": 123
-      }
-    }
-  ],
-  "sla_terms": [
-    {
-      "id": "SLA-001",
-      "metric": "incident_response_time",
-      "target": 4,
-      "unit": "hours",
-      "penalty_amount": 1000,
-      "measurement_period": "monthly"
-    }
-  ],
-  "vague_clauses": [
-    {
-      "clause": "Reasonable efforts for performance optimization",
-      "risk": "Undefined success criteria",
-      "recommendation": "Request specific metrics"
-    }
-  ]
-}
-```
-
-### Compliance Event (Cloudant)
-```json
-{
-  "_id": "EVENT-2024-05-02-001",
-  "type": "compliance_event",
-  "sow_id": "SOW-2024-ACME-001",
-  "obligation_id": "OBL-001",
-  "event_type": "deadline_warning",
-  "severity": "high",
-  "days_remaining": 7,
-  "current_progress": 65,
-  "required_progress": 100,
-  "velocity_trend": "declining",
-  "predicted_completion": "2024-05-15",
-  "penalty_exposure": 25000,
-  "actions_taken": [
-    "Created GitHub Issue #456 (URGENT)",
-    "Scheduled Outlook meeting for tomorrow",
-    "Sent Slack alert to PM"
-  ],
-  "timestamp": "2024-05-02T10:30:00Z"
-}
-```
-
-### Scope Creep Detection
-```json
-{
-  "_id": "SCOPE-2024-05-02-001",
-  "type": "scope_creep",
-  "sow_id": "SOW-2024-ACME-001",
-  "detected_work": {
-    "description": "Advanced Analytics Dashboard",
-    "hours_spent": 40,
-    "cost": 10000,
-    "github_commits": ["abc123", "def456"],
-    "github_issues": [789]
+  "analysis_status": "completed",
+  "review_status": "pending_approval",
+  "risk_assessment": {
+    "risk_score": 72,
+    "risk_level": "high",
+    "total_penalty_exposure": 25000
   },
-  "sow_match": null,
-  "recommendation": "Create Change Request CR-2024-05",
-  "potential_revenue": 15000,
-  "status": "pending_approval"
+  "alerts": [],
+  "action_items": [],
+  "scope_creep_items": [],
+  "approval_history": [],
+  "timeline_events": [],
+  "integration_execution": {
+    "pre_acceptance": {},
+    "post_approval": {}
+  }
+}
+```
+
+### Action Item (Conceptual)
+
+```json
+{
+  "id": "ACTION-OBL-001",
+  "title": "Validate SLA response commitment before acceptance",
+  "description": "Review the contractual response-time commitment and confirm delivery feasibility.",
+  "priority": "high",
+  "recommended_owner": "project_manager",
+  "approval_state": "pending",
+  "execution_state": "not_started",
+  "workflow_stage": "pre_acceptance",
+  "sla_reference": "UAT sign-off within 5 business days"
+}
+```
+
+### Approval Record (Conceptual)
+
+```json
+{
+  "decided_at": "2026-05-03T10:15:00Z",
+  "decision": "approved",
+  "notes": "Proceed with review repo items and risk meeting.",
+  "approved_alert_ids": ["ALERT-001"],
+  "approved_action_ids": ["ACTION-OBL-001"]
 }
 ```
 
@@ -232,334 +351,110 @@ Service-based companies face critical challenges:
 
 ## 🔌 Integration Architecture
 
-### GitHub Integration
-```python
-# Monitor commit velocity vs SOW deadlines
-class GitHubMonitor:
-    def check_milestone_progress(self, sow_obligation):
-        # Get commits for mapped project
-        commits = github_api.get_commits(
-            repo=obligation.mapped_to.github_project,
-            since=obligation.start_date
-        )
-        
-        # Calculate velocity
-        velocity = len(commits) / days_elapsed
-        required_velocity = remaining_work / days_remaining
-        
-        if velocity < required_velocity * 0.8:
-            return {
-                "status": "at_risk",
-                "action": "escalate_to_pm"
-            }
-```
+### Global Credentials vs SOW-Scoped Operations
 
-### GitHub Issues Integration
-```python
-# Auto-create issues from SOW obligations
-class GitHubIssuesExecutor:
-    def create_compliance_issues(self, sow_obligation):
-        # Create issue for major deliverable
-        issue = github_api.create_issue(
-            title=f"SOW: {obligation.description}",
-            body=f"""
-            **SOW Reference**: {obligation.id}
-            **Deadline**: {obligation.deadline}
-            **Penalty**: ${obligation.penalty_amount}/{obligation.penalty_frequency}
-            **Risk Level**: {obligation.risk_level}
-            
-            {obligation.description}
-            """,
-            labels=["sow-compliance", f"risk-{obligation.risk_level}"],
-            milestone=obligation.milestone,
-            assignees=obligation.team_members
-        )
-        
-        # Create pre-delivery review issue
-        review_date = obligation.deadline - timedelta(days=2)
-        github_api.create_issue(
-            title=f"Pre-Delivery Review: {obligation.description}",
-            body=f"Review checklist before {obligation.deadline}",
-            labels=["review", "sow-compliance"],
-            assignees=["pm", "tech-lead"]
-        )
-```
+The system distinguishes between:
+- **global credentials** used to authenticate external systems
+- **SOW-scoped operational routing** used to decide where approved work should go
 
-### Outlook Calendar Integration
-```python
-# Auto-schedule compliance checkpoints via Microsoft Graph API
-class OutlookCalendarExecutor:
-    def schedule_compliance_events(self, sow_obligation):
-        # Pre-delivery review
-        graph_api.create_event(
-            subject=f"SOW Compliance Review: {obligation.description}",
-            start={
-                "dateTime": (obligation.deadline - timedelta(days=2)).isoformat(),
-                "timeZone": "UTC"
-            },
-            end={
-                "dateTime": (obligation.deadline - timedelta(days=2, hours=-1)).isoformat(),
-                "timeZone": "UTC"
-            },
-            attendees=[
-                {"emailAddress": {"address": "pm@company.com"}},
-                {"emailAddress": {"address": "tech-lead@company.com"}}
-            ],
-            body={
-                "contentType": "HTML",
-                "content": f"<h3>Review Checklist</h3><p>{obligation.checklist}</p>"
-            }
-        )
-        
-        # Weekly progress sync
-        graph_api.create_recurring_event(
-            subject=f"SOW Progress: {obligation.description}",
-            recurrence={
-                "pattern": {"type": "weekly", "interval": 1},
-                "range": {"type": "endDate", "endDate": obligation.deadline}
-            },
-            duration="PT30M"
-        )
-```
+This allows shared secret storage while still keeping execution isolated by project/SOW.
+
+### GitHub
+Used for:
+- pre-acceptance review tasks
+- post-approval delivery tasks
+- labels and metadata traceability
+- recording execution links back onto the SOW
+
+### Outlook / Calendar-Oriented Scheduling
+Used for:
+- executive review meetings
+- delivery coordination meetings
+- stage-aware scheduling metadata
+
+### Slack / Collaboration
+Modeled for:
+- alerts
+- SOW-specific stakeholder routing
+- coordination workflows
 
 ---
 
-## 🚨 Alert System
+## 🖥️ Frontend Architecture
 
-### Alert Types & Actions
+### Main User Surfaces
+- Dashboard
+- Risk Report
+- Integration Setup
+- API Settings
+- SOW Management
 
-1. **Critical (Red) - Immediate Action Required**
-   - Trigger: < 24 hours to penalty
-   - Action: Slack DM to PM + CEO, Create P0 GitHub Issue
-   - Example: "URGENT: UAT sign-off due in 18 hours. $5,000/day penalty starts tomorrow."
-
-2. **High (Orange) - Urgent Attention**
-   - Trigger: < 7 days to deadline, velocity declining
-   - Action: Slack channel alert, Schedule emergency meeting
-   - Example: "WARNING: Phase 1 delivery at risk. Current velocity: 60% of required."
-
-3. **Medium (Yellow) - Monitor Closely**
-   - Trigger: Scope creep detected
-   - Action: Email to PM, Create change request draft
-   - Example: "SCOPE ALERT: 40 hours spent on out-of-scope Feature X. Potential revenue: $15k."
-
-4. **Low (Blue) - Informational**
-   - Trigger: Upcoming milestone in 30 days
-   - Action: Calendar invite for planning session
-   - Example: "INFO: Phase 2 kickoff in 30 days. Schedule requirements review."
+### SOW Management Responsibilities
+The SOW Management page is the primary working surface for the product:
+- upload new SOWs
+- review saved packages
+- inspect alerts and action items
+- see numeric risk
+- add review notes
+- accept / reject / clear
+- execute approved work
+- inspect timeline and downstream results
 
 ---
 
-## 🎬 Demo Flow (The "Wow" Moment)
+## 🏆 Hackathon Story
 
-### Opening Scene: Risk Report Screen
+The strongest demo sequence is:
 
-**Visual**: Dashboard with flashing red alert
+1. Upload a real or sample SOW
+2. Show AI-derived obligations, alerts, and SLA risk
+3. Highlight financial exposure
+4. Reopen the saved review package
+5. Accept or reject the review package
+6. Execute approved actions into downstream systems
+7. Show the timeline and traceability
 
-**AI Voice**: "If you don't deliver the UAT sign-off by Friday, you lose $5,000 per day."
-
-**Screen Shows**:
-- PDF SOW with highlighted clause
-- Countdown timer: "48:23:15 until penalty"
-- Current status: "UAT document at 75% completion"
-- Action items: "3 critical tasks blocking sign-off"
-
-**Impact**: Immediate understanding of financial risk
-
-### Scene 2: Scope Creep Detection
-
-**Visual**: Margin leakage alert
-
-**Screen Shows**:
-- "Team spent 40 hours on Advanced Analytics Dashboard"
-- "This feature is NOT in the SOW"
-- "Unbilled work value: $10,000"
-- "Recommended action: Create Change Request CR-2024-05"
-
-**Impact**: Shows how system protects margins
-
-### Scene 3: Auto-Execution
-
-**Visual**: Executive Agent in action
-
-**Screen Shows**:
-- GitHub Issue auto-created: #456 "Complete UAT Documentation"
-- Outlook meeting scheduled: "Pre-Delivery Review - Thursday 2 PM"
-- Slack message: "Reminder: UAT sign-off due Friday"
-- GitHub PR checklist: "Security audit required per SOW Section 8.4"
-
-**Impact**: Demonstrates automation value
+This demonstrates:
+- AI document understanding
+- contract-aware governance
+- human-controlled execution
+- operational traceability
+- measurable business value
 
 ---
 
-## 🔮 Future Roadmap (Agentic Evolution)
+## 🚧 Current Gaps / Pending Work
 
-### Phase 1: Smart Invoice Validation
-- **Auto-validate invoices** against SOW deliverables before submission
-- **Prevent payment disputes** by alerting if invoicing incomplete work
-- **Capture revenue** by flagging unbilled scope creep for change requests
-- **Auto-generate line items** with SOW milestone references for transparency
-- **Example**: "Warning: Milestone 3 is 80% complete. Invoice now may trigger client dispute. Recommend completing or adjusting invoice amount."
+1. **Live watsonx inference**
+   - config exists
+   - parsing path is still partly demo-backed
 
-### Phase 2: Predictive Resourcing
-- AI predicts breach 2 weeks in advance
-- Suggests: "Reassign Developer X to speed up Module Y"
-- Calculates: "Adding 1 developer reduces penalty risk by 80%"
+2. **Continuous monitoring**
+   - review-time monitoring exists
+   - continuous ticket/revenue-leakage monitoring remains pending
 
-### Phase 3: Agentic Negotiation
-- AI reviews new draft SOWs
-- Warns: "You lost 15% margin on last project with 'Uncapped Support' clause"
-- Suggests: "Renegotiate to 'Max 40 hours/month support'"
-- Provides: Historical data on similar clauses
+3. **Execution hardening**
+   - stage-aware execution exists
+   - needs more real-world validation
 
-### Phase 4: Contract Intelligence
-- AI learns from past SOWs
-- Identifies: "Vague clauses that led to disputes"
-- Recommends: "Standard clauses that protect margins"
-- Generates: "Risk-adjusted pricing for new SOWs"
+4. **Frontend service layer**
+   - direct fetch calls remain embedded in components
+   - should migrate to dedicated services
+
+5. **Automated validation**
+   - end-to-end automated tests remain limited
+
+6. **Documentation alignment**
+   - product, architecture, and setup docs need to stay aligned as staged workflow evolves
 
 ---
 
-## 🛠️ Technology Stack
+## ✅ Architecture Summary
 
-### Backend (Python)
-- **Framework**: FastAPI
-- **Agent Framework**: LangChain or CrewAI
-- **LLM**: IBM watsonx.ai (granite-13b-chat-v2)
-- **Document Processing**: Watson Discovery
-- **Database**: IBM Cloudant (NoSQL)
-- **Task Queue**: Celery + Redis
-- **APIs**: GitHub (Issues & Projects), Microsoft Graph (Outlook), Slack
+SOW Sentinel should be understood as a **governed contract-to-execution system**.
 
-### Frontend (React)
-- **Framework**: React 18 + TypeScript
-- **UI**: Material-UI
-- **Charts**: Recharts
-- **State**: Redux Toolkit
-- **Real-time**: WebSockets
+Its core flow is:
 
-### IBM Cloud Services
-- watsonx.ai (SOW parsing, risk analysis)
-- Watson Discovery (document intelligence)
-- Cloudant (data storage)
-- Cloud Functions (scheduled monitoring)
-- Event Streams (real-time events)
+**Upload** → **Analyze** → **Persist** → **Review** → **Accept / Reject / Clear** → **Execute Approved Actions**
 
----
-
-## 📈 Success Metrics
-
-### Financial Impact
-- **Penalties Avoided**: Track $ saved from prevented breaches
-- **Revenue Recovered**: Scope creep converted to change requests
-- **Margin Protected**: % improvement in project profitability
-
-### Operational Impact
-- **Early Warning Time**: Average days before deadline when alert triggered
-- **Compliance Rate**: % of SOW obligations met on time
-- **Automation Rate**: % of manual tasks eliminated
-
-### Business Value
-- **ROI**: (Penalties Avoided + Revenue Recovered) / System Cost
-- **Time Saved**: Hours saved on manual SOW tracking
-- **Risk Reduction**: % decrease in contract disputes
-
----
-
-## 🎯 Competitive Advantage
-
-**Why SOW Sentinel Wins**:
-
-1. **Service Provider Perspective**: Built for companies delivering services, not buying them
-2. **Financial Focus**: Directly prevents revenue loss and penalties
-3. **Agentic Automation**: Not just monitoring - takes action
-4. **Execution Integration**: Connects SOW to actual work (GitHub/Jira)
-5. **Predictive Intelligence**: Warns before problems occur
-
-**The Pitch**: "We save service companies from losing money on contracts they've already won."
-
----
-
-## 📝 Sample Action Items (AI-Generated)
-
-### Financial Tasks
-```
-CRITICAL: Penalty Clause 5.2 active
-- Deliverable: UAT Sign-off Document
-- Deadline: May 15th, 2024 (48 hours)
-- Penalty: $1,000/day after deadline
-- Action: Schedule emergency review meeting (Outlook)
-- Blocker: Security audit pending
-- GitHub Issue: #456
-```
-
-### Operational Tasks
-```
-RECURRING: Bi-Weekly Progress Call
-- SOW Reference: Section 3.1
-- Frequency: Every 2 weeks
-- Attendees: PM, Tech Lead, Client Stakeholder
-- Agenda: Milestone progress, risk review
-- Outlook Calendar: Auto-scheduled recurring meeting
-```
-
-### Technical Tasks
-```
-REQUIREMENT: Data Encryption at Rest
-- SOW Reference: Security Clause 8.4
-- GitHub Issue: #789
-- Definition of Done:
-  ✓ Implement AES-256 encryption
-  ✓ Document key management
-  ✓ Pass security audit
-  ✓ Update deployment guide
-```
-
----
-
-## 🚀 Getting Started
-
-### For Developers
-```bash
-# Clone repository
-git clone https://github.com/your-org/sow-sentinel.git
-
-# Backend setup
-cd backend
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-
-# Configure IBM Cloud credentials
-cp .env.example .env
-# Edit .env with your watsonx.ai API keys
-
-# Start backend
-python -m uvicorn app.main:app --reload
-
-# Frontend setup
-cd frontend
-npm install
-npm run dev
-```
-
-### For Business Users
-1. Upload your SOW (PDF/DOCX)
-2. Review extracted obligations
-3. Connect GitHub Issues & Outlook Calendar
-4. Monitor the Loss Prevention Dashboard
-5. Let the agents handle compliance
-
----
-
-## 📞 Support & Documentation
-
-- **Architecture**: This document
-- **API Docs**: http://localhost:8000/docs
-- **User Guide**: docs/USER_GUIDE.md
-- **Integration Guide**: docs/INTEGRATIONS.md
-- **Demo Video**: [Link to 3-minute demo]
-
----
-
-**Built with ❤️ for service companies who want to protect their margins and deliver on time.**
+That is the architectural foundation for future implementation and the core hackathon message.
