@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Box,
   Container,
@@ -10,6 +10,7 @@ import {
   LinearProgress,
   Chip,
   Alert,
+  CircularProgress,
 } from '@mui/material';
 import {
   TrendingUp,
@@ -20,40 +21,82 @@ import {
   Assessment,
 } from '@mui/icons-material';
 
-const Dashboard: React.FC = () => {
-  // Mock data - will be replaced with real API calls
-  const stats = {
-    totalContracts: 24,
-    activeContracts: 18,
-    expiringSoon: 3,
-    slaCompliance: 95.8,
-    criticalAlerts: 2,
-    highRisks: 5,
+interface DashboardSummary {
+  active_sows: number;
+  total_obligations: number;
+  at_risk_obligations: number;
+  critical_alerts: number;
+  total_penalty_exposure: number;
+  immediate_risk: number;
+  penalties_avoided_ytd: number;
+  scope_creep_detected: number;
+  potential_revenue_recovery: number;
+  overall_compliance_rate: number;
+  sla_status: {
+    compliant: number;
+    at_risk: number;
+    breached: number;
   };
+}
 
+const Dashboard: React.FC = () => {
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Mock recent alerts data
   const recentAlerts = [
     {
       id: 1,
       severity: 'critical',
       title: 'SLA Breach Imminent',
-      contract: 'CTR-2024-001',
-      time: '5 minutes ago',
+      contract: 'SOW-2024-ACME-001',
+      time: '2 hours ago'
     },
     {
       id: 2,
       severity: 'high',
-      title: 'Response Time Threshold',
-      contract: 'CTR-2024-015',
-      time: '1 hour ago',
+      title: 'Response Time Approaching Limit',
+      contract: 'SOW-2024-ACME-001',
+      time: '5 hours ago'
     },
     {
       id: 3,
       severity: 'medium',
-      title: 'Contract Renewal Due',
-      contract: 'CTR-2024-008',
-      time: '3 hours ago',
-    },
+      title: 'Scope Creep Detected',
+      contract: 'SOW-2024-ACME-001',
+      time: '1 day ago'
+    }
   ];
+
+  useEffect(() => {
+    fetchDashboardSummary();
+  }, []);
+
+  const fetchDashboardSummary = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/sow/dashboard/summary');
+      const data = await response.json();
+      setSummary(data.summary);
+      setLoading(false);
+    } catch (error) {
+      console.error('Failed to fetch dashboard summary:', error);
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (!summary) {
+    return (
+      <Alert severity="error">Failed to load dashboard data</Alert>
+    );
+  }
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
@@ -87,11 +130,11 @@ const Dashboard: React.FC = () => {
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                 <Description color="primary" sx={{ mr: 1 }} />
-                <Typography variant="h6">Total Contracts</Typography>
+                <Typography variant="h6">Active SOWs</Typography>
               </Box>
-              <Typography variant="h3">{stats.totalContracts}</Typography>
+              <Typography variant="h3">{summary.active_sows}</Typography>
               <Typography variant="body2" color="text.secondary">
-                {stats.activeContracts} active
+                {summary.total_obligations} total obligations
               </Typography>
             </CardContent>
           </Card>
@@ -104,10 +147,10 @@ const Dashboard: React.FC = () => {
                 <CheckCircle color="success" sx={{ mr: 1 }} />
                 <Typography variant="h6">SLA Compliance</Typography>
               </Box>
-              <Typography variant="h3">{stats.slaCompliance}%</Typography>
+              <Typography variant="h3">{summary.overall_compliance_rate}%</Typography>
               <LinearProgress
                 variant="determinate"
-                value={stats.slaCompliance}
+                value={summary.overall_compliance_rate}
                 color="success"
                 sx={{ mt: 1 }}
               />
@@ -120,11 +163,11 @@ const Dashboard: React.FC = () => {
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                 <Warning color="warning" sx={{ mr: 1 }} />
-                <Typography variant="h6">Expiring Soon</Typography>
+                <Typography variant="h6">Penalty Exposure</Typography>
               </Box>
-              <Typography variant="h3">{stats.expiringSoon}</Typography>
+              <Typography variant="h3">${(summary.total_penalty_exposure / 1000).toFixed(0)}K</Typography>
               <Typography variant="body2" color="text.secondary">
-                Within 30 days
+                ${(summary.immediate_risk / 1000).toFixed(0)}K immediate risk
               </Typography>
             </CardContent>
           </Card>
@@ -137,10 +180,67 @@ const Dashboard: React.FC = () => {
                 <Error color="error" sx={{ mr: 1 }} />
                 <Typography variant="h6">Critical Alerts</Typography>
               </Box>
-              <Typography variant="h3">{stats.criticalAlerts}</Typography>
+              <Typography variant="h3">{summary.critical_alerts}</Typography>
               <Typography variant="body2" color="text.secondary">
-                {stats.highRisks} high risks
+                {summary.at_risk_obligations} at risk
               </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Financial Summary */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Financial Protection
+              </Typography>
+              <Box sx={{ mt: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="body2">Penalties Avoided YTD</Typography>
+                  <Typography variant="body2" fontWeight="bold" color="success.main">
+                    ${(summary.penalties_avoided_ytd / 1000).toFixed(0)}K
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="body2">Scope Creep Detected</Typography>
+                  <Typography variant="body2" fontWeight="bold" color="warning.main">
+                    {summary.scope_creep_detected} items
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="body2">Potential Recovery</Typography>
+                  <Typography variant="body2" fontWeight="bold" color="primary.main">
+                    ${(summary.potential_revenue_recovery / 1000).toFixed(0)}K
+                  </Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} md={6}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                SLA Status
+              </Typography>
+              <Box sx={{ mt: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="body2">Compliant</Typography>
+                  <Chip label={summary.sla_status.compliant} color="success" size="small" />
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="body2">At Risk</Typography>
+                  <Chip label={summary.sla_status.at_risk} color="warning" size="small" />
+                </Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Typography variant="body2">Breached</Typography>
+                  <Chip label={summary.sla_status.breached} color="error" size="small" />
+                </Box>
+              </Box>
             </CardContent>
           </Card>
         </Grid>

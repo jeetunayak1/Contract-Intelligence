@@ -212,19 +212,17 @@ class CloudantDatabase:
         """
         db_name = db_name or self.db_name
         try:
-            index_def = {
-                "index": {
-                    "fields": index_fields
-                },
-                "type": "json"
+            # Prepare index definition
+            index_spec = {
+                "fields": index_fields
             }
             
-            if index_name:
-                index_def["name"] = index_name
-            
+            # Call post_index with correct parameters
             self.client.post_index(
                 db=db_name,
-                index=index_def
+                index=index_spec,
+                name=index_name,
+                type="json"
             ).get_result()
             
             logger.info(f"Index created on fields: {index_fields}")

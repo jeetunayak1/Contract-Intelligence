@@ -1,8 +1,9 @@
 """
 Configuration settings for the Contract Intelligence System
 """
-from pydantic_settings import BaseSettings
-from typing import List
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
+from typing import List, Union
 import os
 
 
@@ -11,13 +12,26 @@ class Settings(BaseSettings):
     Application settings loaded from environment variables
     """
     
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=True,
+        extra="ignore"
+    )
+    
     # Application
     APP_NAME: str = "Contract Intelligence System"
     DEBUG: bool = False
     API_VERSION: str = "v1"
     
     # CORS
-    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5173"]
+    CORS_ORIGINS: Union[List[str], str] = ["http://localhost:3000", "http://localhost:5173"]
+    
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v):
+        if isinstance(v, str):
+            return [origin.strip() for origin in v.split(",")]
+        return v
     
     # IBM Cloudant Database
     CLOUDANT_URL: str = ""
@@ -67,7 +81,14 @@ class Settings(BaseSettings):
     
     # File Upload
     MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10MB
-    ALLOWED_EXTENSIONS: List[str] = [".pdf", ".docx", ".doc"]
+    ALLOWED_EXTENSIONS: Union[List[str], str] = [".pdf", ".docx", ".doc"]
+    
+    @field_validator("ALLOWED_EXTENSIONS", mode="before")
+    @classmethod
+    def parse_allowed_extensions(cls, v):
+        if isinstance(v, str):
+            return [ext.strip() for ext in v.split(",")]
+        return v
     
     # Agent Configuration
     CONTRACT_AGENT_ENABLED: bool = True
@@ -89,9 +110,6 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_FORMAT: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
 
 
 # Create settings instance
