@@ -332,6 +332,121 @@ async def create_sample_alerts(sow_id: str, obligation_id: str):
     return alerts
 
 
+async def create_sample_integration_config(sow_id: str):
+    """Create sample integration configuration"""
+    print("\n🔧 Creating Sample Integration Configuration...")
+    
+    integration_config = {
+        "_id": f"integration_config_{sow_id}",
+        "type": "integration_config",
+        "sow_id": sow_id,
+        "github": {
+            "sow_id": sow_id,
+            "repository_owner": "acme-corp",
+            "repository_name": "platform-migration",
+            "labels": [
+                {
+                    "name": "sla-critical",
+                    "color": "d73a4a",
+                    "description": "Critical SLA obligation - immediate attention required"
+                },
+                {
+                    "name": "sla-high",
+                    "color": "ff6b6b",
+                    "description": "High priority SLA obligation"
+                },
+                {
+                    "name": "sla-medium",
+                    "color": "fbca04",
+                    "description": "Medium priority SLA obligation"
+                },
+                {
+                    "name": "scope-creep",
+                    "color": "f9d0c4",
+                    "description": "Potential scope creep - not in original SOW"
+                },
+                {
+                    "name": "penalty-risk",
+                    "color": "d93f0b",
+                    "description": "Risk of financial penalty if not completed"
+                },
+                {
+                    "name": "milestone",
+                    "color": "0e8a16",
+                    "description": "SOW milestone deliverable"
+                },
+                {
+                    "name": "compliance",
+                    "color": "1d76db",
+                    "description": "Compliance requirement"
+                }
+            ],
+            "milestone_name": f"{sow_id} Deliverables",
+            "auto_create_issues": True,
+            "configured": True,
+            "configured_at": "2024-05-01T10:00:00Z"
+        },
+        "slack": {
+            "sow_id": sow_id,
+            "workspace_id": "acme-corp",
+            "channels": [
+                {
+                    "name": f"{sow_id.lower().replace('_', '-')}-alerts",
+                    "description": f"SLA and compliance alerts for {sow_id}",
+                    "is_private": False,
+                    "members": []
+                }
+            ],
+            "alert_channel": f"{sow_id.lower().replace('_', '-')}-alerts",
+            "notification_preferences": {
+                "sla_breach": True,
+                "scope_creep": True,
+                "milestone_due": True,
+                "daily_summary": False
+            },
+            "configured": True,
+            "configured_at": "2024-05-01T10:00:00Z"
+        },
+        "outlook": {
+            "sow_id": sow_id,
+            "team_members": [
+                {
+                    "name": "John Smith",
+                    "email": "john.smith@acme.com",
+                    "role": "Project Manager",
+                    "notify_on": ["sla_breach", "scope_creep", "milestone_due"]
+                },
+                {
+                    "name": "Jane Doe",
+                    "email": "jane.doe@acme.com",
+                    "role": "Tech Lead",
+                    "notify_on": ["sla_breach", "milestone_due"]
+                }
+            ],
+            "calendar_name": f"{sow_id} - Project Calendar",
+            "auto_schedule_reviews": True,
+            "review_lead_time_days": 7,
+            "notification_preferences": {
+                "milestone_reminders": True,
+                "sla_alerts": True,
+                "weekly_summary": True
+            },
+            "configured": True,
+            "configured_at": "2024-05-01T10:00:00Z"
+        },
+        "created_at": "2024-05-01T10:00:00Z",
+        "updated_at": "2024-05-01T10:00:00Z"
+    }
+    
+    created_config = await cloudant_db.create_document(integration_config)
+    print(f"   ✅ Created Integration Config for: {sow_id}")
+    print(f"      - GitHub: {created_config['github']['repository_owner']}/{created_config['github']['repository_name']}")
+    print(f"      - Slack: {created_config['slack']['alert_channel']}")
+    print(f"      - Outlook: {len(created_config['outlook']['team_members'])} team members")
+    
+    return created_config
+
+
 async def initialize_database():
     """Main initialization function"""
     print("=" * 70)
@@ -359,6 +474,9 @@ async def initialize_database():
         # Step 5: Create sample scope creep
         await create_sample_scope_creep(sow["_id"])
         
+        # Step 6: Create sample integration configuration
+        await create_sample_integration_config(sow["_id"])
+        
         print("\n" + "=" * 70)
         print("✅ DATABASE INITIALIZATION COMPLETE!")
         print("=" * 70)
@@ -370,6 +488,7 @@ async def initialize_database():
         print(f"   - Events: 2 created")
         print(f"   - Alerts: 2 created")
         print(f"   - Scope Creep: 1 detected")
+        print(f"   - Integration Config: GitHub, Slack, Outlook configured")
         print("\n🚀 Ready to use! Access the API at http://localhost:8000/docs")
         print("=" * 70)
         

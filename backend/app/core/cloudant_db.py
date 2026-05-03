@@ -345,3 +345,12 @@ async def init_cloudant():
         raise
 
 # Made with Bob
+
+
+# Global instance
+cloudant_db = CloudantDatabase()
+
+
+def get_cloudant_db() -> CloudantDatabase:
+    """Get the global Cloudant database instance"""
+    return cloudant_db

@@ -87,9 +87,6 @@ class OutlookConfig(BaseModel):
 
 class IntegrationConfig(BaseModel):
     """Complete integration configuration for an SOW"""
-    _id: Optional[str] = Field(None, alias="_id")
-    _rev: Optional[str] = Field(None, alias="_rev")
-    
     sow_id: str = Field(..., description="SOW identifier")
     github: Optional[GitHubConfig] = None
     slack: Optional[SlackConfig] = None

@@ -3,7 +3,7 @@ Integration Configuration API
 Handles GitHub, Slack, and Outlook configuration for SOWs
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException
 from typing import List, Dict, Any
 import requests
 from datetime import datetime
@@ -19,11 +19,10 @@ from app.models.integration_config import (
     OutlookConfig,
     TeamMember
 )
-from app.core.cloudant_db import get_cloudant_db
-from app.core.config import get_settings
+from app.core.cloudant_db import cloudant_db
+from app.core.config import settings
 
 router = APIRouter(prefix="/api/v1/integrations", tags=["integrations"])
-settings = get_settings()
 
 
 @router.post("/configure", response_model=ConfigurationResponse)
@@ -85,7 +84,6 @@ async def apply_configuration(sow_id: str, config: IntegrationConfig):
     """
     Apply the configuration and create resources
     """
-    db = get_cloudant_db()
     results = {
         "github": {"success": False, "message": ""},
         "slack": {"success": False, "message": ""},
@@ -127,18 +125,18 @@ async def apply_configuration(sow_id: str, config: IntegrationConfig):
     
     # Save configuration to database
     config.updated_at = datetime.utcnow()
-    config_dict = config.model_dump(by_alias=True, exclude_none=True)
+    config_dict = config.model_dump(exclude_none=True)
+    config_dict["_id"] = f"integration_config_{sow_id}"
+    config_dict["type"] = "integration_config"
     
     try:
         # Check if configuration exists
-        existing = db.get_document(f"integration_config_{sow_id}")
+        existing = await cloudant_db.get_document(f"integration_config_{sow_id}")
         if existing:
-            config_dict["_id"] = existing["_id"]
             config_dict["_rev"] = existing["_rev"]
-            db.update_document(config_dict)
+            await cloudant_db.update_document(f"integration_config_{sow_id}", config_dict)
         else:
-            config_dict["_id"] = f"integration_config_{sow_id}"
-            db.create_document(config_dict)
+            await cloudant_db.create_document(config_dict)
     except Exception as e:
         results["database"] = {"success": False, "message": str(e)}
     
@@ -152,10 +150,8 @@ async def apply_configuration(sow_id: str, config: IntegrationConfig):
 @router.get("/{sow_id}", response_model=IntegrationConfig)
 async def get_integration_config(sow_id: str):
     """Get integration configuration for an SOW"""
-    db = get_cloudant_db()
-    
     try:
-        config = db.get_document(f"integration_config_{sow_id}")
+        config = await cloudant_db.get_document(f"integration_config_{sow_id}")
         return IntegrationConfig(**config)
     except Exception as e:
         raise HTTPException(status_code=404, detail=f"Configuration not found for SOW {sow_id}")
@@ -164,11 +160,9 @@ async def get_integration_config(sow_id: str):
 @router.delete("/{sow_id}")
 async def delete_integration_config(sow_id: str):
     """Delete integration configuration"""
-    db = get_cloudant_db()
-    
     try:
-        config = db.get_document(f"integration_config_{sow_id}")
-        db.delete_document(config["_id"], config["_rev"])
+        config = await cloudant_db.get_document(f"integration_config_{sow_id}")
+        await cloudant_db.delete_document(config["_id"], config["_rev"])
         return {"message": f"Configuration deleted for SOW {sow_id}"}
     except Exception as e:
         raise HTTPException(status_code=404, detail=f"Configuration not found for SOW {sow_id}")
