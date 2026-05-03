@@ -7,8 +7,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
 
-# Import SOW API router
+# Import API routers
 from app.api.sow import router as sow_router
+from app.api.integrations import router as integrations_router
 
 app = FastAPI(
     title="SOW Sentinel - Demo Mode",
@@ -16,8 +17,9 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Include SOW router
+# Include routers
 app.include_router(sow_router)
+app.include_router(integrations_router)
 
 # CORS middleware
 app.add_middleware(

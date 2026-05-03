@@ -61,6 +61,20 @@ class Settings(BaseSettings):
     COS_ENDPOINT: str = ""
     COS_BUCKET_NAME: str = "contract-files"
     
+    # GitHub Integration
+    GITHUB_TOKEN: str = ""
+    GITHUB_OWNER: str = ""
+    GITHUB_REPO: str = ""
+    
+    # Slack Integration
+    SLACK_BOT_TOKEN: str = ""
+    SLACK_WORKSPACE_ID: str = ""
+    
+    # Microsoft Graph API (Outlook)
+    MICROSOFT_CLIENT_ID: str = ""
+    MICROSOFT_CLIENT_SECRET: str = ""
+    MICROSOFT_TENANT_ID: str = ""
+    
     # IBM Event Streams (Kafka)
     KAFKA_BROKERS: str = ""
     KAFKA_API_KEY: str = ""
