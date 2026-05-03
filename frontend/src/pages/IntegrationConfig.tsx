@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Container,
@@ -92,24 +92,69 @@ interface ConfigurationResponse {
 
 const IntegrationConfig: React.FC = () => {
   const [activeStep, setActiveStep] = useState(0);
-  const [sowId, setSowId] = useState('SOW-2024-ACME-001');
+  const [sowId, setSowId] = useState('');
   const [teamInfo, setTeamInfo] = useState<TeamInfo>({
-    project_manager: 'John Smith <john.smith@acme.com>',
-    tech_lead: 'Jane Doe <jane.doe@acme.com>',
+    project_manager: '',
+    tech_lead: '',
     team_size: 5,
-    github_repo: 'acme-corp/platform-migration',
-    slack_workspace: 'acme-corp',
-    key_stakeholders: ['john.smith@acme.com', 'jane.doe@acme.com'],
+    github_repo: '',
+    slack_workspace: '',
+    key_stakeholders: [],
   });
   const [configuration, setConfiguration] = useState<ConfigurationResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
   const [applyResults, setApplyResults] = useState<any>(null);
   const [newStakeholder, setNewStakeholder] = useState('');
+  const [existingConfig, setExistingConfig] = useState<ConfigurationResponse | null>(null);
+  const [loadingExisting, setLoadingExisting] = useState(false);
 
   const steps = ['Team Information', 'AI Configuration', 'Review & Apply'];
 
+  // Load existing configuration if SOW ID changes
+  useEffect(() => {
+    const loadExistingConfig = async () => {
+      if (!sowId.trim()) return;
+      
+      setLoadingExisting(true);
+      try {
+        const response = await fetch(`http://localhost:8000/api/v1/integrations/${sowId}`);
+        if (response.ok) {
+          const data = await response.json();
+          setExistingConfig(data);
+          // Populate form with existing data
+          if (data.github) {
+            setTeamInfo(prev => ({
+              ...prev,
+              github_repo: `${data.github.repository_owner}/${data.github.repository_name}`
+            }));
+          }
+          if (data.slack) {
+            setTeamInfo(prev => ({
+              ...prev,
+              slack_workspace: data.slack.workspace_id
+            }));
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load existing configuration:', error);
+      } finally {
+        setLoadingExisting(false);
+      }
+    };
+
+    loadExistingConfig();
+  }, [sowId]);
+
   const handleGenerateConfig = async () => {
+    if (!sowId.trim()) {
+      alert('Please enter an SOW ID');
+      return;
+    }
+    if (!teamInfo.project_manager.trim() || !teamInfo.tech_lead.trim()) {
+      alert('Please enter Project Manager and Tech Lead information');
+      return;
+    }
     setLoading(true);
     try {
       const response = await fetch('http://localhost:8000/api/v1/integrations/configure', {
