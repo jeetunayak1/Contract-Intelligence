@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     WATSONX_API_KEY: str = ""
     WATSONX_PROJECT_ID: str = ""
     WATSONX_URL: str = "https://us-south.ml.cloud.ibm.com"
-    WATSONX_MODEL_ID: str = "ibm/granite-13b-chat-v2"
+    WATSONX_MODEL_ID: str = "meta-llama/llama-3-3-70b-instruct"
     
     # Watson Discovery
     DISCOVERY_API_KEY: str = ""

@@ -108,8 +108,9 @@ class CloudantDatabase:
             ).get_result()
             return response
         except Exception as e:
-            if "not found" in str(e).lower():
-                logger.warning(f"Document not found: {doc_id}")
+            error_text = str(e).lower()
+            if "not found" in error_text or "not_found" in error_text or "status code: 404" in error_text:
+                logger.info(f"Document not found: {doc_id}")
                 return None
             logger.error(f"Failed to get document: {str(e)}")
             raise

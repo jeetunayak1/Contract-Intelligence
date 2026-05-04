@@ -87,7 +87,15 @@ class MonitoringAgent:
         Returns:
             Compliance event if issue detected
         """
-        deadline = datetime.fromisoformat(obligation["deadline"])
+        deadline_raw = obligation.get("deadline")
+        if not deadline_raw:
+            return None
+
+        try:
+            deadline = datetime.fromisoformat(deadline_raw)
+        except (TypeError, ValueError):
+            return None
+
         now = datetime.utcnow()
         days_remaining = (deadline - now).days
         

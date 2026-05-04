@@ -10,6 +10,7 @@ import Dashboard from './pages/Dashboard';
 import RiskReport from './pages/RiskReport';
 import IntegrationConfig from './pages/IntegrationConfig';
 import Settings from './pages/Settings';
+import SOWManagement from './pages/SOWManagement';
 
 const theme = createTheme({
   palette: {
@@ -91,7 +92,7 @@ function App() {
               <Route path="/risk-report" element={<RiskReport sowId="SOW-2024-ACME-001" />} />
               <Route path="/integrations" element={<IntegrationConfig />} />
               <Route path="/settings" element={<Settings />} />
-              <Route path="/sows" element={<div>SOW Management - Coming Soon</div>} />
+              <Route path="/sows" element={<SOWManagement />} />
               <Route path="/compliance" element={<div>Compliance - Coming Soon</div>} />
               <Route path="/scope-creep" element={<div>Scope Creep Detection - Coming Soon</div>} />
               <Route path="/alerts" element={<div>Alerts - Coming Soon</div>} />

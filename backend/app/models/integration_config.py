@@ -15,15 +15,57 @@ class GitHubLabel(BaseModel):
     description: str = Field(..., description="Label description")
 
 
+class GitHubIssueTemplate(BaseModel):
+    """Per-SOW GitHub issue template configuration"""
+    title_prefix: str = Field(..., description="Prefix applied to generated issue titles")
+    body_intro: str = Field(..., description="Introductory text for generated issue bodies")
+    default_labels: List[str] = Field(default_factory=list, description="Default labels for all generated issues")
+    assignees: List[str] = Field(default_factory=list, description="Default assignees for generated issues")
+
+
+class GitHubRepositoryTarget(BaseModel):
+    """Repository target used by a workflow stage"""
+    repository_owner: str = Field(..., description="GitHub repository owner")
+    repository_name: str = Field(..., description="GitHub repository name")
+    purpose: str = Field(..., description="Why this repository is used in the workflow stage")
+    stage: str = Field(..., description="Workflow stage, such as pre_acceptance or post_approval")
+
+
+class GitHubAutomationSettings(BaseModel):
+    """Automation settings for GitHub resources created per SOW"""
+    create_labels: bool = Field(True, description="Create or sync SOW labels")
+    create_milestone: bool = Field(True, description="Create milestone for the SOW")
+    create_issue_templates: bool = Field(True, description="Generate issue templates or issue content per SOW")
+    auto_create_obligation_issues: bool = Field(True, description="Automatically create issues for SOW obligations")
+    auto_create_review_issue: bool = Field(True, description="Automatically create pre-delivery review issues")
+
+
+class GitHubGeneratedIssue(BaseModel):
+    """Issue definition generated for a specific SOW obligation"""
+    obligation_id: str = Field(..., description="Associated SOW obligation ID")
+    title: str = Field(..., description="Generated GitHub issue title")
+    body: str = Field(..., description="Generated GitHub issue body")
+    labels: List[str] = Field(default_factory=list, description="Labels to apply to the issue")
+    assignees: List[str] = Field(default_factory=list, description="Assignees for the issue")
+    issue_number: Optional[int] = Field(None, description="GitHub issue number if created")
+    issue_url: Optional[str] = Field(None, description="GitHub issue URL if created")
+    issue_type: str = Field("obligation", description="Type of generated issue")
+    created: bool = Field(False, description="Whether the issue was created successfully")
+
+
 class GitHubConfig(BaseModel):
     """GitHub repository configuration for SOW"""
     sow_id: str = Field(..., description="SOW identifier")
-    repository_owner: str = Field(..., description="GitHub repository owner")
-    repository_name: str = Field(..., description="GitHub repository name")
+    repository_owner: str = Field(..., description="Default GitHub repository owner")
+    repository_name: str = Field(..., description="Default GitHub repository name")
     labels: List[GitHubLabel] = Field(default_factory=list, description="Custom labels for this SOW")
     milestone_name: Optional[str] = Field(None, description="GitHub milestone name")
     project_board_name: Optional[str] = Field(None, description="GitHub project board name")
-    auto_create_issues: bool = Field(True, description="Automatically create issues for obligations")
+    issue_template: Optional[GitHubIssueTemplate] = Field(None, description="Issue generation template for this SOW")
+    automation: GitHubAutomationSettings = Field(default_factory=GitHubAutomationSettings, description="Per-SOW GitHub automation settings")
+    generated_issues: List[GitHubGeneratedIssue] = Field(default_factory=list, description="Issues generated for this SOW")
+    pre_acceptance_repo: Optional[GitHubRepositoryTarget] = Field(None, description="Repository used before SOW acceptance for negotiation and review actions")
+    delivery_repo: Optional[GitHubRepositoryTarget] = Field(None, description="Repository used after SOW approval for delivery execution items")
     configured: bool = Field(False, description="Configuration completed")
     configured_at: Optional[datetime] = None
 
@@ -71,6 +113,8 @@ class OutlookConfig(BaseModel):
     sow_id: str = Field(..., description="SOW identifier")
     team_members: List[TeamMember] = Field(default_factory=list, description="Team members")
     calendar_name: str = Field(..., description="Shared calendar name")
+    pre_acceptance_calendar_name: Optional[str] = Field(None, description="Calendar used before SOW acceptance for legal/commercial clarification meetings")
+    delivery_calendar_name: Optional[str] = Field(None, description="Calendar used after approval for delivery governance meetings")
     auto_schedule_reviews: bool = Field(True, description="Auto-schedule milestone reviews")
     review_lead_time_days: int = Field(7, description="Days before milestone to schedule review")
     notification_preferences: Dict[str, bool] = Field(
@@ -88,6 +132,7 @@ class OutlookConfig(BaseModel):
 class IntegrationConfig(BaseModel):
     """Complete integration configuration for an SOW"""
     sow_id: str = Field(..., description="SOW identifier")
+    team_info: Dict[str, Any] = Field(default_factory=dict, description="Per-SOW team and stakeholder context")
     github: Optional[GitHubConfig] = None
     slack: Optional[SlackConfig] = None
     outlook: Optional[OutlookConfig] = None
@@ -100,6 +145,14 @@ class IntegrationConfig(BaseModel):
         json_schema_extra = {
             "example": {
                 "sow_id": "SOW-2024-ACME-001",
+                "team_info": {
+                    "project_manager": "John Smith <john.smith@acme.com>",
+                    "tech_lead": "Jane Doe <jane.doe@acme.com>",
+                    "team_size": 5,
+                    "github_repo": "acme-corp/platform-migration",
+                    "slack_workspace": "acme-corp",
+                    "key_stakeholders": ["john.smith@acme.com", "jane.doe@acme.com"]
+                },
                 "github": {
                     "sow_id": "SOW-2024-ACME-001",
                     "repository_owner": "acme-corp",
@@ -116,6 +169,20 @@ class IntegrationConfig(BaseModel):
                             "description": "Potential scope creep"
                         }
                     ],
+                    "issue_template": {
+                        "title_prefix": "[SOW-2024-ACME-001]",
+                        "body_intro": "Auto-generated from SOW Sentinel for this SOW.",
+                        "default_labels": ["compliance", "milestone"],
+                        "assignees": []
+                    },
+                    "automation": {
+                        "create_labels": True,
+                        "create_milestone": True,
+                        "create_issue_templates": True,
+                        "auto_create_obligation_issues": True,
+                        "auto_create_review_issue": True
+                    },
+                    "generated_issues": [],
                     "configured": True
                 },
                 "slack": {

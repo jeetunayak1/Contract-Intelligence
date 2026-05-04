@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Box,
   Container,
@@ -11,14 +11,17 @@ import {
   Chip,
   Alert,
   CircularProgress,
+  List,
+  ListItem,
+  ListItemText,
+  Stack,
 } from '@mui/material';
 import {
-  TrendingUp,
   Warning,
   CheckCircle,
-  Error,
+  Error as ErrorIcon,
   Description,
-  Assessment,
+  AttachMoney,
 } from '@mui/icons-material';
 
 interface DashboardSummary {
@@ -39,50 +42,78 @@ interface DashboardSummary {
   };
 }
 
+interface DashboardSow {
+  _id: string;
+  sow_number: string;
+  client_name: string;
+  project_name: string;
+  review_status?: string;
+  analysis_status?: string;
+  total_penalty_exposure?: number;
+  alerts_count?: number;
+  high_risk_count?: number;
+  updated_at?: string;
+}
+
+interface DashboardListResponse {
+  sows?: DashboardSow[];
+}
+
 const Dashboard: React.FC = () => {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [sows, setSows] = useState<DashboardSow[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Mock recent alerts data
-  const recentAlerts = [
-    {
-      id: 1,
-      severity: 'critical',
-      title: 'SLA Breach Imminent',
-      contract: 'SOW-2024-ACME-001',
-      time: '2 hours ago'
-    },
-    {
-      id: 2,
-      severity: 'high',
-      title: 'Response Time Approaching Limit',
-      contract: 'SOW-2024-ACME-001',
-      time: '5 hours ago'
-    },
-    {
-      id: 3,
-      severity: 'medium',
-      title: 'Scope Creep Detected',
-      contract: 'SOW-2024-ACME-001',
-      time: '1 day ago'
-    }
-  ];
-
   useEffect(() => {
-    fetchDashboardSummary();
+    void fetchDashboardData();
   }, []);
 
-  const fetchDashboardSummary = async () => {
+  const fetchDashboardData = async () => {
+    setLoading(true);
     try {
-      const response = await fetch('http://localhost:8000/api/v1/sow/dashboard/summary');
-      const data = await response.json();
-      setSummary(data.summary);
-      setLoading(false);
+      const [summaryResponse, listResponse] = await Promise.all([
+        fetch('http://localhost:8000/api/v1/sow/dashboard/summary'),
+        fetch('http://localhost:8000/api/v1/sow/list'),
+      ]);
+
+      if (!summaryResponse.ok) {
+        throw new globalThis.Error('Failed to fetch dashboard summary');
+      }
+
+      const summaryData = await summaryResponse.json();
+      setSummary(summaryData.summary);
+
+      if (listResponse.ok) {
+        const listData: DashboardListResponse = await listResponse.json();
+        setSows(listData.sows ?? []);
+      } else {
+        setSows([]);
+      }
     } catch (error) {
-      console.error('Failed to fetch dashboard summary:', error);
+      console.error('Failed to fetch dashboard data:', error);
+      setSummary(null);
+      setSows([]);
+    } finally {
       setLoading(false);
     }
   };
+
+  const recentSows = useMemo(
+    () =>
+      [...sows]
+        .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''))
+        .slice(0, 5),
+    [sows]
+  );
+
+  const riskBuckets = useMemo(() => {
+    const critical = sows.filter((sow) => (sow.high_risk_count ?? 0) >= 3).length;
+    const high = sows.filter((sow) => (sow.high_risk_count ?? 0) > 0 && (sow.high_risk_count ?? 0) < 3).length;
+    const medium = sows.filter((sow) => (sow.alerts_count ?? 0) > 0 && (sow.high_risk_count ?? 0) === 0).length;
+    const low = Math.max(sows.length - critical - high - medium, 0);
+
+    return { critical, high, medium, low };
+  }, [sows]);
 
   if (loading) {
     return (
@@ -93,37 +124,20 @@ const Dashboard: React.FC = () => {
   }
 
   if (!summary) {
-    return (
-      <Alert severity="error">Failed to load dashboard data</Alert>
-    );
+    return <Alert severity="error">Failed to load dashboard data</Alert>;
   }
-
-  const getSeverityColor = (severity: string) => {
-    switch (severity) {
-      case 'critical':
-        return 'error';
-      case 'high':
-        return 'warning';
-      case 'medium':
-        return 'info';
-      default:
-        return 'default';
-    }
-  };
 
   return (
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
-      {/* Header */}
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" gutterBottom>
-          Contract Intelligence Dashboard
+          SOW Risk Intelligence Dashboard
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Real-time SLA monitoring and compliance tracking
+          Live portfolio view of obligations, financial exposure, risk concentration, and recovery opportunity.
         </Typography>
       </Box>
 
-      {/* Stats Cards */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} sm={6} md={3}>
           <Card>
@@ -162,12 +176,12 @@ const Dashboard: React.FC = () => {
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <Warning color="warning" sx={{ mr: 1 }} />
+                <AttachMoney color="warning" sx={{ mr: 1 }} />
                 <Typography variant="h6">Penalty Exposure</Typography>
               </Box>
-              <Typography variant="h3">${(summary.total_penalty_exposure / 1000).toFixed(0)}K</Typography>
+              <Typography variant="h4">${summary.total_penalty_exposure.toLocaleString()}</Typography>
               <Typography variant="body2" color="text.secondary">
-                ${(summary.immediate_risk / 1000).toFixed(0)}K immediate risk
+                ${summary.immediate_risk.toLocaleString()} immediate risk
               </Typography>
             </CardContent>
           </Card>
@@ -177,19 +191,18 @@ const Dashboard: React.FC = () => {
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <Error color="error" sx={{ mr: 1 }} />
+                <ErrorIcon color="error" sx={{ mr: 1 }} />
                 <Typography variant="h6">Critical Alerts</Typography>
               </Box>
               <Typography variant="h3">{summary.critical_alerts}</Typography>
               <Typography variant="body2" color="text.secondary">
-                {summary.at_risk_obligations} at risk
+                {summary.at_risk_obligations} obligations at risk
               </Typography>
             </CardContent>
           </Card>
         </Grid>
       </Grid>
 
-      {/* Financial Summary */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} md={6}>
           <Card>
@@ -197,14 +210,14 @@ const Dashboard: React.FC = () => {
               <Typography variant="h6" gutterBottom>
                 Financial Protection
               </Typography>
-              <Box sx={{ mt: 2 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+              <Stack spacing={1.5} sx={{ mt: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Typography variant="body2">Penalties Avoided YTD</Typography>
                   <Typography variant="body2" fontWeight="bold" color="success.main">
-                    ${(summary.penalties_avoided_ytd / 1000).toFixed(0)}K
+                    ${summary.penalties_avoided_ytd.toLocaleString()}
                   </Typography>
                 </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Typography variant="body2">Scope Creep Detected</Typography>
                   <Typography variant="body2" fontWeight="bold" color="warning.main">
                     {summary.scope_creep_detected} items
@@ -213,10 +226,10 @@ const Dashboard: React.FC = () => {
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Typography variant="body2">Potential Recovery</Typography>
                   <Typography variant="body2" fontWeight="bold" color="primary.main">
-                    ${(summary.potential_revenue_recovery / 1000).toFixed(0)}K
+                    ${summary.potential_revenue_recovery.toLocaleString()}
                   </Typography>
                 </Box>
-              </Box>
+              </Stack>
             </CardContent>
           </Card>
         </Grid>
@@ -227,12 +240,12 @@ const Dashboard: React.FC = () => {
               <Typography variant="h6" gutterBottom>
                 SLA Status
               </Typography>
-              <Box sx={{ mt: 2 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+              <Stack spacing={1.5} sx={{ mt: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Typography variant="body2">Compliant</Typography>
                   <Chip label={summary.sla_status.compliant} color="success" size="small" />
                 </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                   <Typography variant="body2">At Risk</Typography>
                   <Chip label={summary.sla_status.at_risk} color="warning" size="small" />
                 </Box>
@@ -240,140 +253,94 @@ const Dashboard: React.FC = () => {
                   <Typography variant="body2">Breached</Typography>
                   <Chip label={summary.sla_status.breached} color="error" size="small" />
                 </Box>
-              </Box>
+              </Stack>
             </CardContent>
           </Card>
         </Grid>
       </Grid>
 
-      {/* Main Content */}
       <Grid container spacing={3}>
-        {/* Recent Alerts */}
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3 }}>
+        <Grid item xs={12} md={7}>
+          <Paper sx={{ p: 3, height: '100%' }}>
             <Typography variant="h6" gutterBottom>
-              Recent Alerts
+              Recently Updated SOWs
             </Typography>
-            <Box sx={{ mt: 2 }}>
-              {recentAlerts.map((alert) => (
-                <Alert
-                  key={alert.id}
-                  severity={getSeverityColor(alert.severity) as any}
-                  sx={{ mb: 2 }}
-                  icon={<Warning />}
-                >
-                  <Box>
-                    <Typography variant="subtitle2">{alert.title}</Typography>
-                    <Typography variant="body2">
-                      Contract: {alert.contract} • {alert.time}
-                    </Typography>
-                  </Box>
-                </Alert>
-              ))}
-            </Box>
+            {recentSows.length === 0 ? (
+              <Alert severity="info">No SOWs available yet.</Alert>
+            ) : (
+              <List>
+                {recentSows.map((sow) => (
+                  <ListItem key={sow._id} divider>
+                    <ListItemText
+                      primary={sow.project_name}
+                      secondary={`${sow.client_name} · ${sow.sow_number} · ${sow.high_risk_count ?? 0} high-risk obligations · ${sow.alerts_count ?? 0} alerts`}
+                    />
+                    <Chip
+                      size="small"
+                      label={sow.review_status || 'pending'}
+                      color={sow.review_status === 'approved' ? 'success' : 'default'}
+                    />
+                  </ListItem>
+                ))}
+              </List>
+            )}
           </Paper>
         </Grid>
 
-        {/* Compliance Overview */}
-        <Grid item xs={12} md={6}>
-          <Paper sx={{ p: 3 }}>
+        <Grid item xs={12} md={5}>
+          <Paper sx={{ p: 3, height: '100%' }}>
             <Typography variant="h6" gutterBottom>
-              Compliance Overview
-            </Typography>
-            <Box sx={{ mt: 3 }}>
-              <Box sx={{ mb: 3 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="body2">System Uptime</Typography>
-                  <Typography variant="body2" fontWeight="bold">
-                    99.95%
-                  </Typography>
-                </Box>
-                <LinearProgress
-                  variant="determinate"
-                  value={99.95}
-                  color="success"
-                />
-              </Box>
-
-              <Box sx={{ mb: 3 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="body2">Response Time</Typography>
-                  <Typography variant="body2" fontWeight="bold">
-                    98.2%
-                  </Typography>
-                </Box>
-                <LinearProgress
-                  variant="determinate"
-                  value={98.2}
-                  color="success"
-                />
-              </Box>
-
-              <Box sx={{ mb: 3 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="body2">Resolution Time</Typography>
-                  <Typography variant="body2" fontWeight="bold">
-                    92.5%
-                  </Typography>
-                </Box>
-                <LinearProgress
-                  variant="determinate"
-                  value={92.5}
-                  color="warning"
-                />
-              </Box>
-            </Box>
-          </Paper>
-        </Grid>
-
-        {/* Risk Summary */}
-        <Grid item xs={12}>
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Risk Summary
+              Portfolio Risk Mix
             </Typography>
             <Grid container spacing={2} sx={{ mt: 1 }}>
-              <Grid item xs={12} sm={3}>
+              <Grid item xs={6}>
                 <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'error.light', borderRadius: 1 }}>
                   <Typography variant="h4" color="error.dark">
-                    2
+                    {riskBuckets.critical}
                   </Typography>
                   <Typography variant="body2" color="error.dark">
-                    Critical Risks
+                    Critical
                   </Typography>
                 </Box>
               </Grid>
-              <Grid item xs={12} sm={3}>
+              <Grid item xs={6}>
                 <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'warning.light', borderRadius: 1 }}>
                   <Typography variant="h4" color="warning.dark">
-                    5
+                    {riskBuckets.high}
                   </Typography>
                   <Typography variant="body2" color="warning.dark">
-                    High Risks
+                    High
                   </Typography>
                 </Box>
               </Grid>
-              <Grid item xs={12} sm={3}>
+              <Grid item xs={6}>
                 <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
                   <Typography variant="h4" color="info.dark">
-                    8
+                    {riskBuckets.medium}
                   </Typography>
                   <Typography variant="body2" color="info.dark">
-                    Medium Risks
+                    Medium
                   </Typography>
                 </Box>
               </Grid>
-              <Grid item xs={12} sm={3}>
+              <Grid item xs={6}>
                 <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'success.light', borderRadius: 1 }}>
                   <Typography variant="h4" color="success.dark">
-                    12
+                    {riskBuckets.low}
                   </Typography>
                   <Typography variant="body2" color="success.dark">
-                    Low Risks
+                    Low
                   </Typography>
                 </Box>
               </Grid>
             </Grid>
+
+            <Alert severity="warning" icon={<Warning />} sx={{ mt: 3 }}>
+              <Typography variant="subtitle2">Immediate portfolio focus</Typography>
+              <Typography variant="body2">
+                {summary.critical_alerts} critical alerts and ${summary.immediate_risk.toLocaleString()} in immediate exposure require human review.
+              </Typography>
+            </Alert>
           </Paper>
         </Grid>
       </Grid>

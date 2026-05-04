@@ -45,6 +45,8 @@ interface TeamInfo {
   team_size: number;
   github_repo: string;
   slack_workspace: string;
+  slack_alert_channel: string;
+  outlook_calendar_name: string;
   key_stakeholders: string[];
 }
 
@@ -54,10 +56,38 @@ interface GitHubLabel {
   description: string;
 }
 
+interface GitHubIssueTemplate {
+  title_prefix: string;
+  body_intro: string;
+  default_labels: string[];
+  assignees: string[];
+}
+
+interface GitHubGeneratedIssue {
+  obligation_id: string;
+  title: string;
+  body: string;
+  labels: string[];
+  assignees: string[];
+  issue_number?: number;
+  issue_url?: string;
+  issue_type: string;
+  created: boolean;
+}
+
+interface GitHubAutomationSettings {
+  create_labels: boolean;
+  create_milestone: boolean;
+  create_issue_templates: boolean;
+  auto_create_obligation_issues: boolean;
+  auto_create_review_issue: boolean;
+}
+
 interface SlackChannel {
   name: string;
   description: string;
   is_private: boolean;
+  members?: string[];
 }
 
 interface TeamMember {
@@ -67,25 +97,39 @@ interface TeamMember {
   notify_on: string[];
 }
 
+interface IntegrationConfigData {
+  sow_id: string;
+  team_info?: Partial<TeamInfo>;
+  github?: {
+    sow_id?: string;
+    repository_owner: string;
+    repository_name: string;
+    labels: GitHubLabel[];
+    milestone_name: string;
+    project_board_name?: string;
+    issue_template?: GitHubIssueTemplate;
+    automation?: GitHubAutomationSettings;
+    generated_issues?: GitHubGeneratedIssue[];
+    configured?: boolean;
+  };
+  slack?: {
+    sow_id?: string;
+    workspace_id: string;
+    channels: SlackChannel[];
+    alert_channel: string;
+    configured?: boolean;
+  };
+  outlook?: {
+    sow_id?: string;
+    team_members: TeamMember[];
+    calendar_name: string;
+    configured?: boolean;
+  };
+}
+
 interface ConfigurationResponse {
   sow_id: string;
-  suggested_config: {
-    github?: {
-      repository_owner: string;
-      repository_name: string;
-      labels: GitHubLabel[];
-      milestone_name: string;
-    };
-    slack?: {
-      workspace_id: string;
-      channels: SlackChannel[];
-      alert_channel: string;
-    };
-    outlook?: {
-      team_members: TeamMember[];
-      calendar_name: string;
-    };
-  };
+  suggested_config: IntegrationConfigData;
   explanation: string;
   next_steps: string[];
 }
@@ -99,6 +143,8 @@ const IntegrationConfig: React.FC = () => {
     team_size: 5,
     github_repo: '',
     slack_workspace: '',
+    slack_alert_channel: '',
+    outlook_calendar_name: '',
     key_stakeholders: [],
   });
   const [configuration, setConfiguration] = useState<ConfigurationResponse | null>(null);
@@ -106,7 +152,7 @@ const IntegrationConfig: React.FC = () => {
   const [applying, setApplying] = useState(false);
   const [applyResults, setApplyResults] = useState<any>(null);
   const [newStakeholder, setNewStakeholder] = useState('');
-  const [existingConfig, setExistingConfig] = useState<ConfigurationResponse | null>(null);
+  const [existingConfig, setExistingConfig] = useState<IntegrationConfigData | null>(null);
   const [loadingExisting, setLoadingExisting] = useState(false);
 
   const steps = ['Team Information', 'AI Configuration', 'Review & Apply'];
@@ -122,19 +168,16 @@ const IntegrationConfig: React.FC = () => {
         if (response.ok) {
           const data = await response.json();
           setExistingConfig(data);
-          // Populate form with existing data
-          if (data.github) {
-            setTeamInfo(prev => ({
-              ...prev,
-              github_repo: `${data.github.repository_owner}/${data.github.repository_name}`
-            }));
-          }
-          if (data.slack) {
-            setTeamInfo(prev => ({
-              ...prev,
-              slack_workspace: data.slack.workspace_id
-            }));
-          }
+          setTeamInfo(prev => ({
+            ...prev,
+            ...data.team_info,
+            github_repo: data.github
+              ? `${data.github.repository_owner}/${data.github.repository_name}`
+              : prev.github_repo,
+            slack_workspace: data.slack?.workspace_id ?? prev.slack_workspace,
+            slack_alert_channel: data.slack?.alert_channel ?? prev.slack_alert_channel,
+            outlook_calendar_name: data.outlook?.calendar_name ?? prev.outlook_calendar_name,
+          }));
         }
       } catch (error) {
         console.error('Failed to load existing configuration:', error);
@@ -184,12 +227,20 @@ const IntegrationConfig: React.FC = () => {
       });
       const data = await response.json();
       setApplyResults(data);
+      setExistingConfig(configuration.suggested_config);
       setActiveStep(2);
     } catch (error) {
       console.error('Failed to apply configuration:', error);
     } finally {
       setApplying(false);
     }
+  };
+
+  const updateTeamInfo = (field: keyof TeamInfo, value: string | number) => {
+    setTeamInfo((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
   };
 
   const addStakeholder = () => {
@@ -209,6 +260,12 @@ const IntegrationConfig: React.FC = () => {
     });
   };
 
+  const generatedIssues = configuration?.suggested_config.github?.generated_issues ?? [];
+  const existingGeneratedIssues = existingConfig?.github?.generated_issues ?? [];
+  const existingGitHubSow = existingConfig?.github?.sow_id ?? existingConfig?.sow_id;
+  const existingSlackSow = existingConfig?.slack?.sow_id ?? existingConfig?.sow_id;
+  const existingOutlookSow = existingConfig?.outlook?.sow_id ?? existingConfig?.sow_id;
+
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
       {/* Header */}
@@ -218,7 +275,7 @@ const IntegrationConfig: React.FC = () => {
           AI-Powered Integration Configuration
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Let AI configure GitHub, Slack, and Outlook integrations for your SOW
+          Configure GitHub, Slack, and Outlook per SOW so each engagement gets its own labels, issues, channels, and stakeholders
         </Typography>
       </Box>
 
@@ -233,6 +290,55 @@ const IntegrationConfig: React.FC = () => {
         </Stepper>
       </Paper>
 
+      {existingConfig && (
+        <Paper sx={{ p: 3, mb: 3, border: '1px solid', borderColor: 'divider' }}>
+          <Typography variant="h6" gutterBottom>
+            Existing Saved Per-SOW Configuration
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Each integration below is stored independently against SOW <strong>{sowId}</strong> and will not affect other SOWs.
+          </Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={4}>
+              <Typography variant="subtitle2">GitHub SOW Binding</Typography>
+              <Typography variant="body2" color="text.secondary">
+                {existingGitHubSow || 'Not saved'}
+              </Typography>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Typography variant="subtitle2">Slack SOW Binding</Typography>
+              <Typography variant="body2" color="text.secondary">
+                {existingSlackSow || 'Not saved'}
+              </Typography>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Typography variant="subtitle2">Outlook SOW Binding</Typography>
+              <Typography variant="body2" color="text.secondary">
+                {existingOutlookSow || 'Not saved'}
+              </Typography>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2">Saved Slack Alert Channel</Typography>
+              <Typography variant="body2" color="text.secondary">
+                {existingConfig.slack?.alert_channel || 'Not saved'}
+              </Typography>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="subtitle2">Saved Outlook Calendar</Typography>
+              <Typography variant="body2" color="text.secondary">
+                {existingConfig.outlook?.calendar_name || 'Not saved'}
+              </Typography>
+            </Grid>
+            <Grid item xs={12}>
+              <Typography variant="subtitle2">Saved Generated GitHub Issues</Typography>
+              <Typography variant="body2" color="text.secondary">
+                {existingGeneratedIssues.length} issue definitions saved for this SOW
+              </Typography>
+            </Grid>
+          </Grid>
+        </Paper>
+      )}
+
       {/* Step 1: Team Information */}
       {activeStep === 0 && (
         <Paper sx={{ p: 3 }}>
@@ -240,7 +346,7 @@ const IntegrationConfig: React.FC = () => {
             Tell us about your team
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Provide team information and AI will suggest optimal integration configuration
+            Provide SOW-specific team information and the system will generate dedicated GitHub, Slack, and Outlook configuration for this engagement
           </Typography>
 
           <Grid container spacing={3}>
@@ -249,7 +355,7 @@ const IntegrationConfig: React.FC = () => {
                 fullWidth
                 label="SOW ID"
                 value={sowId}
-                onChange={(e) => setSowId(e.target.value)}
+                onChange={(e) => setSowId(e.target.value.toUpperCase())}
                 helperText="Statement of Work identifier"
               />
             </Grid>
@@ -259,7 +365,7 @@ const IntegrationConfig: React.FC = () => {
                 fullWidth
                 label="Project Manager"
                 value={teamInfo.project_manager}
-                onChange={(e) => setTeamInfo({ ...teamInfo, project_manager: e.target.value })}
+                onChange={(e) => updateTeamInfo('project_manager', e.target.value)}
                 helperText="Format: Name <email@example.com>"
               />
             </Grid>
@@ -269,7 +375,7 @@ const IntegrationConfig: React.FC = () => {
                 fullWidth
                 label="Tech Lead"
                 value={teamInfo.tech_lead}
-                onChange={(e) => setTeamInfo({ ...teamInfo, tech_lead: e.target.value })}
+                onChange={(e) => updateTeamInfo('tech_lead', e.target.value)}
                 helperText="Format: Name <email@example.com>"
               />
             </Grid>
@@ -280,7 +386,7 @@ const IntegrationConfig: React.FC = () => {
                 type="number"
                 label="Team Size"
                 value={teamInfo.team_size}
-                onChange={(e) => setTeamInfo({ ...teamInfo, team_size: parseInt(e.target.value) })}
+                onChange={(e) => updateTeamInfo('team_size', parseInt(e.target.value || '0', 10))}
               />
             </Grid>
 
@@ -289,7 +395,7 @@ const IntegrationConfig: React.FC = () => {
                 fullWidth
                 label="GitHub Repository"
                 value={teamInfo.github_repo}
-                onChange={(e) => setTeamInfo({ ...teamInfo, github_repo: e.target.value })}
+                onChange={(e) => updateTeamInfo('github_repo', e.target.value)}
                 helperText="Format: owner/repository"
                 InputProps={{
                   startAdornment: <GitHub sx={{ mr: 1, color: 'text.secondary' }} />,
@@ -297,16 +403,43 @@ const IntegrationConfig: React.FC = () => {
               />
             </Grid>
 
-            <Grid item xs={12}>
+            <Grid item xs={12} md={6}>
               <TextField
                 fullWidth
                 label="Slack Workspace"
                 value={teamInfo.slack_workspace}
-                onChange={(e) => setTeamInfo({ ...teamInfo, slack_workspace: e.target.value })}
+                onChange={(e) => updateTeamInfo('slack_workspace', e.target.value)}
+                helperText="Workspace for this SOW only"
                 InputProps={{
                   startAdornment: <Chat sx={{ mr: 1, color: 'text.secondary' }} />,
                 }}
               />
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Slack Alert Channel"
+                value={teamInfo.slack_alert_channel}
+                onChange={(e) => updateTeamInfo('slack_alert_channel', e.target.value)}
+                helperText="Dedicated alert channel for this SOW, e.g. sow-acme-alerts"
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Outlook Calendar Name"
+                value={teamInfo.outlook_calendar_name}
+                onChange={(e) => updateTeamInfo('outlook_calendar_name', e.target.value)}
+                helperText="Dedicated calendar for this SOW, e.g. ACME Migration Delivery Calendar"
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <Alert severity="info">
+                This form defines a separate GitHub repository mapping, Slack workspace/channel, Outlook calendar, and stakeholder list for the current SOW only.
+              </Alert>
             </Grid>
 
             <Grid item xs={12}>
@@ -317,7 +450,7 @@ const IntegrationConfig: React.FC = () => {
                 <TextField
                   fullWidth
                   size="small"
-                  placeholder="email@example.com"
+                  placeholder="stakeholder@example.com"
                   value={newStakeholder}
                   onChange={(e) => setNewStakeholder(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && addStakeholder()}
@@ -366,6 +499,24 @@ const IntegrationConfig: React.FC = () => {
             </Typography>
           </Alert>
 
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            <Grid item xs={12} md={4}>
+              <Alert severity="info">
+                GitHub is scoped to <strong>{configuration.suggested_config.github?.sow_id || configuration.sow_id}</strong>
+              </Alert>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Alert severity="info">
+                Slack is scoped to <strong>{configuration.suggested_config.slack?.sow_id || configuration.sow_id}</strong>
+              </Alert>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Alert severity="info">
+                Outlook is scoped to <strong>{configuration.suggested_config.outlook?.sow_id || configuration.sow_id}</strong>
+              </Alert>
+            </Grid>
+          </Grid>
+
           {/* GitHub Configuration */}
           {configuration.suggested_config.github && (
             <Accordion defaultExpanded>
@@ -375,6 +526,12 @@ const IntegrationConfig: React.FC = () => {
               </AccordionSummary>
               <AccordionDetails>
                 <Grid container spacing={2}>
+                  <Grid item xs={12}>
+                    <Alert severity="success">
+                      This GitHub setup belongs only to SOW <strong>{configuration.suggested_config.github.sow_id || configuration.sow_id}</strong>.
+                      Labels, milestone, board, and generated issues are independent from other SOWs.
+                    </Alert>
+                  </Grid>
                   <Grid item xs={12}>
                     <Typography variant="subtitle2" color="text.secondary">
                       Repository: {configuration.suggested_config.github.repository_owner}/
@@ -400,10 +557,79 @@ const IntegrationConfig: React.FC = () => {
                       ))}
                     </Box>
                   </Grid>
-                  <Grid item xs={12}>
+                  <Grid item xs={12} md={6}>
                     <Typography variant="body2" color="text.secondary">
                       Milestone: {configuration.suggested_config.github.milestone_name}
                     </Typography>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="body2" color="text.secondary">
+                      Project Board: {configuration.suggested_config.github.project_board_name || 'Not configured'}
+                    </Typography>
+                  </Grid>
+                  {configuration.suggested_config.github.issue_template && (
+                    <Grid item xs={12}>
+                      <Card variant="outlined">
+                        <CardContent>
+                          <Typography variant="subtitle2" gutterBottom>
+                            Issue Template
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            Prefix: {configuration.suggested_config.github.issue_template.title_prefix}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            Default assignees: {configuration.suggested_config.github.issue_template.assignees.join(', ') || 'None'}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            Default labels: {configuration.suggested_config.github.issue_template.default_labels.join(', ') || 'None'}
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  )}
+                  {configuration.suggested_config.github.automation && (
+                    <Grid item xs={12}>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                        {Object.entries(configuration.suggested_config.github.automation).map(([key, enabled]) => (
+                          <Chip
+                            key={key}
+                            label={key.replace(/_/g, ' ')}
+                            color={enabled ? 'success' : 'default'}
+                            variant={enabled ? 'filled' : 'outlined'}
+                          />
+                        ))}
+                      </Box>
+                    </Grid>
+                  )}
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle2" gutterBottom>
+                      Generated SOW Issues ({generatedIssues.length})
+                    </Typography>
+                    <List dense>
+                      {generatedIssues.map((issue) => (
+                        <ListItem key={issue.obligation_id} alignItems="flex-start">
+                          <ListItemIcon>
+                            <Info color="primary" />
+                          </ListItemIcon>
+                          <ListItemText
+                            primary={issue.title}
+                            secondary={
+                              <>
+                                <Typography variant="body2" color="text.secondary">
+                                  Type: {issue.issue_type} • Obligation: {issue.obligation_id}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                  Labels: {issue.labels.join(', ') || 'None'}
+                                </Typography>
+                                <Typography variant="body2" color="text.secondary">
+                                  Assignees: {issue.assignees.join(', ') || 'None'}
+                                </Typography>
+                              </>
+                            }
+                          />
+                        </ListItem>
+                      ))}
+                    </List>
                   </Grid>
                 </Grid>
               </AccordionDetails>
@@ -420,13 +646,18 @@ const IntegrationConfig: React.FC = () => {
               <AccordionDetails>
                 <Grid container spacing={2}>
                   <Grid item xs={12}>
+                    <Alert severity="success">
+                      Slack notifications and channels are isolated for SOW <strong>{configuration.suggested_config.slack.sow_id || configuration.sow_id}</strong>.
+                    </Alert>
+                  </Grid>
+                  <Grid item xs={12}>
                     <Typography variant="subtitle2" color="text.secondary">
                       Workspace: {configuration.suggested_config.slack.workspace_id}
                     </Typography>
                   </Grid>
                   <Grid item xs={12}>
                     <Typography variant="subtitle2" gutterBottom>
-                      Channels
+                      Dedicated Channels
                     </Typography>
                     <List dense>
                       {configuration.suggested_config.slack.channels.map((channel) => (
@@ -460,6 +691,11 @@ const IntegrationConfig: React.FC = () => {
               <AccordionDetails>
                 <Grid container spacing={2}>
                   <Grid item xs={12}>
+                    <Alert severity="success">
+                      Outlook schedules and stakeholders are isolated for SOW <strong>{configuration.suggested_config.outlook.sow_id || configuration.sow_id}</strong>.
+                    </Alert>
+                  </Grid>
+                  <Grid item xs={12}>
                     <Typography variant="subtitle2" color="text.secondary">
                       Calendar: {configuration.suggested_config.outlook.calendar_name}
                     </Typography>
@@ -488,6 +724,52 @@ const IntegrationConfig: React.FC = () => {
           )}
 
           {/* Next Steps */}
+          {existingConfig && (
+            <Paper sx={{ p: 3, mt: 3, mb: 3, border: '1px solid', borderColor: 'divider' }}>
+              <Typography variant="h6" gutterBottom>
+                Existing Saved Per-SOW Configuration
+              </Typography>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={4}>
+                  <Typography variant="subtitle2">GitHub SOW Binding</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {existingGitHubSow || 'Not saved'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <Typography variant="subtitle2">Slack SOW Binding</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {existingSlackSow || 'Not saved'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={4}>
+                  <Typography variant="subtitle2">Outlook SOW Binding</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {existingOutlookSow || 'Not saved'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2">Saved Slack Alert Channel</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {existingConfig.slack?.alert_channel || 'Not saved'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2">Saved Outlook Calendar</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {existingConfig.outlook?.calendar_name || 'Not saved'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12}>
+                  <Typography variant="subtitle2">Saved Generated GitHub Issues</Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {existingGeneratedIssues.length} issue definitions saved for this SOW
+                  </Typography>
+                </Grid>
+              </Grid>
+            </Paper>
+          )}
+
           <Paper sx={{ p: 3, mt: 3, bgcolor: 'background.default' }}>
             <Typography variant="subtitle2" gutterBottom>
               Next Steps

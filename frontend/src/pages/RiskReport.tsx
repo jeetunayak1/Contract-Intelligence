@@ -7,22 +7,20 @@ import {
   Grid,
   Alert,
   AlertTitle,
-  Chip,
   LinearProgress,
   List,
   ListItem,
   ListItemText,
-  Button,
-  Divider,
-  Paper
+  Paper,
+  Chip,
+  Stack,
 } from '@mui/material';
 import {
   Warning as WarningIcon,
   Error as ErrorIcon,
   TrendingDown as TrendingDownIcon,
-  AttachMoney as MoneyIcon,
   Schedule as ScheduleIcon,
-  CheckCircle as CheckIcon
+  CheckCircle as CheckIcon,
 } from '@mui/icons-material';
 
 interface RiskReportProps {
@@ -30,21 +28,35 @@ interface RiskReportProps {
 }
 
 interface CriticalAlert {
-  id: string;
+  _id?: string;
+  id?: string;
   title: string;
   message: string;
   severity: string;
-  penalty_amount: number;
-  days_until_penalty: number;
-  hours_until_penalty: number;
-  obligation: {
-    id: string;
-    description: string;
-    deadline: string;
-    current_progress: number;
-    blockers: string[];
-  };
+  penalty_amount?: number;
+  days_until_penalty?: number;
+  hours_until_penalty?: number;
   recommended_actions: string[];
+}
+
+interface HighRiskObligation {
+  id: string;
+  description: string;
+  deadline?: string;
+  risk_level?: string;
+  penalty_amount?: number;
+  penalty_amount_display?: string;
+  days_remaining?: number | null;
+  hours_remaining?: number | null;
+  progress_percentage?: number;
+}
+
+interface ScopeCreepItem {
+  id?: string;
+  title?: string;
+  description?: string;
+  potential_revenue?: number;
+  cost?: number;
 }
 
 interface RiskReportData {
@@ -55,8 +67,8 @@ interface RiskReportData {
   overall_risk_score: number;
   overall_risk_level: string;
   critical_alerts: CriticalAlert[];
-  high_risk_obligations: any[];
-  scope_creep_detected: any[];
+  high_risk_obligations: HighRiskObligation[];
+  scope_creep_detected: ScopeCreepItem[];
   financial_summary: {
     total_penalty_exposure: number;
     immediate_risk: number;
@@ -77,36 +89,37 @@ const RiskReport: React.FC<RiskReportProps> = ({ sowId }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchRiskReport();
+    void fetchRiskReport();
   }, [sowId]);
 
   const fetchRiskReport = async () => {
+    setLoading(true);
     try {
       const response = await fetch(`http://localhost:8000/api/v1/sow/${sowId}/risk-report`);
+      if (!response.ok) {
+        throw new globalThis.Error('Failed to fetch risk report');
+      }
+
       const data = await response.json();
-      setRiskReport(data.risk_report);
-      setLoading(false);
+      setRiskReport(data.risk_report ?? null);
     } catch (error) {
       console.error('Failed to fetch risk report:', error);
+      setRiskReport(null);
+    } finally {
       setLoading(false);
-    }
-  };
-
-  const getSeverityColor = (severity: string) => {
-    switch (severity) {
-      case 'critical': return 'error';
-      case 'high': return 'warning';
-      case 'medium': return 'info';
-      default: return 'success';
     }
   };
 
   const getRiskLevelColor = (level: string) => {
     switch (level) {
-      case 'critical': return '#d32f2f';
-      case 'high': return '#f57c00';
-      case 'medium': return '#fbc02d';
-      default: return '#388e3c';
+      case 'critical':
+        return '#d32f2f';
+      case 'high':
+        return '#f57c00';
+      case 'medium':
+        return '#fbc02d';
+      default:
+        return '#388e3c';
     }
   };
 
@@ -115,7 +128,7 @@ const RiskReport: React.FC<RiskReportProps> = ({ sowId }) => {
       <Box sx={{ width: '100%', mt: 4 }}>
         <LinearProgress />
         <Typography sx={{ mt: 2, textAlign: 'center' }}>
-          Loading Risk Report...
+          Loading risk report...
         </Typography>
       </Box>
     );
@@ -132,10 +145,9 @@ const RiskReport: React.FC<RiskReportProps> = ({ sowId }) => {
 
   return (
     <Box sx={{ p: 3 }}>
-      {/* Header */}
       <Box sx={{ mb: 4 }}>
         <Typography variant="h3" gutterBottom sx={{ fontWeight: 'bold' }}>
-          🚨 Risk Report
+          Risk Report
         </Typography>
         <Typography variant="h5" color="text.secondary">
           {riskReport.project_name} - {riskReport.client_name}
@@ -145,7 +157,6 @@ const RiskReport: React.FC<RiskReportProps> = ({ sowId }) => {
         </Typography>
       </Box>
 
-      {/* Overall Risk Score */}
       <Card sx={{ mb: 3, bgcolor: getRiskLevelColor(riskReport.overall_risk_level), color: 'white' }}>
         <CardContent>
           <Grid container alignItems="center" spacing={2}>
@@ -164,160 +175,154 @@ const RiskReport: React.FC<RiskReportProps> = ({ sowId }) => {
         </CardContent>
       </Card>
 
-      {/* Critical Alerts - THE WOW MOMENT */}
-      {riskReport.critical_alerts.map((alert) => (
-        <Card 
-          key={alert.id} 
-          sx={{ 
-            mb: 3, 
-            border: '3px solid #d32f2f',
-            animation: 'pulse 2s infinite'
-          }}
-        >
-          <CardContent>
-            <Alert severity="error" sx={{ mb: 2 }}>
-              <AlertTitle sx={{ fontSize: '1.5rem', fontWeight: 'bold' }}>
-                {alert.title}
-              </AlertTitle>
-              <Typography variant="h5" sx={{ mt: 2, mb: 2 }}>
-                {alert.message}
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ p: 3, bgcolor: '#ffebee' }}>
+            <Typography variant="body2" color="text.secondary">
+              Total Penalty Exposure
+            </Typography>
+            <Typography variant="h4" color="error.main">
+              ${riskReport.financial_summary.total_penalty_exposure.toLocaleString()}
+            </Typography>
+          </Paper>
+        </Grid>
+        <Grid item xs={12} md={6}>
+          <Paper sx={{ p: 3, bgcolor: '#fff3e0' }}>
+            <Typography variant="body2" color="text.secondary">
+              Immediate Risk
+            </Typography>
+            <Typography variant="h4" color="warning.main">
+              ${riskReport.financial_summary.immediate_risk.toLocaleString()}
+            </Typography>
+          </Paper>
+        </Grid>
+      </Grid>
+
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold' }}>
+          Critical Alerts
+        </Typography>
+        {riskReport.critical_alerts.length === 0 ? (
+          <Alert severity="success">No critical alerts for this SOW.</Alert>
+        ) : (
+          <Stack spacing={2}>
+            {riskReport.critical_alerts.map((alert) => (
+              <Card
+                key={alert._id || alert.id || alert.title}
+                sx={{ border: '2px solid #d32f2f' }}
+              >
+                <CardContent>
+                  <Alert severity="error" sx={{ mb: 2 }}>
+                    <AlertTitle>{alert.title}</AlertTitle>
+                    {alert.message}
+                  </Alert>
+
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
+                    {typeof alert.penalty_amount === 'number' && (
+                      <Chip color="error" label={`Penalty $${alert.penalty_amount.toLocaleString()}`} />
+                    )}
+                    {typeof alert.hours_until_penalty === 'number' && (
+                      <Chip icon={<ScheduleIcon />} color="warning" label={`${alert.hours_until_penalty} hours left`} />
+                    )}
+                    {typeof alert.days_until_penalty === 'number' && typeof alert.hours_until_penalty !== 'number' && (
+                      <Chip icon={<ScheduleIcon />} color="warning" label={`${alert.days_until_penalty} days left`} />
+                    )}
+                  </Box>
+
+                  {alert.recommended_actions?.length > 0 && (
+                    <List dense>
+                      {alert.recommended_actions.map((action, index) => (
+                        <ListItem key={`${alert.title}-${index}`} sx={{ px: 0 }}>
+                          <ListItemText primary={action} />
+                        </ListItem>
+                      ))}
+                    </List>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </Stack>
+        )}
+      </Box>
+
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        <Grid item xs={12} md={7}>
+          <Card>
+            <CardContent>
+              <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold' }}>
+                High-Risk Obligations
               </Typography>
-            </Alert>
-
-            {/* Countdown Timer */}
-            <Paper sx={{ p: 3, mb: 2, bgcolor: '#ffebee' }}>
-              <Grid container spacing={3} alignItems="center">
-                <Grid item>
-                  <ScheduleIcon sx={{ fontSize: 50, color: '#d32f2f' }} />
-                </Grid>
-                <Grid item xs>
-                  <Typography variant="h3" sx={{ fontWeight: 'bold', color: '#d32f2f' }}>
-                    {alert.hours_until_penalty} Hours
-                  </Typography>
-                  <Typography variant="h6" color="text.secondary">
-                    Until ${alert.penalty_amount.toLocaleString()}/day penalty
-                  </Typography>
-                </Grid>
-              </Grid>
-            </Paper>
-
-            {/* Current Status */}
-            <Box sx={{ mb: 3 }}>
-              <Typography variant="h6" gutterBottom>
-                📊 Current Status
-              </Typography>
-              <Box sx={{ mb: 2 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography>Progress</Typography>
-                  <Typography fontWeight="bold">
-                    {alert.obligation.current_progress}%
-                  </Typography>
-                </Box>
-                <LinearProgress 
-                  variant="determinate" 
-                  value={alert.obligation.current_progress}
-                  sx={{ height: 10, borderRadius: 5 }}
-                  color={alert.obligation.current_progress > 80 ? 'success' : 'error'}
-                />
-              </Box>
-            </Box>
-
-            {/* Blockers */}
-            {alert.obligation.blockers.length > 0 && (
-              <Box sx={{ mb: 3 }}>
-                <Typography variant="h6" gutterBottom color="error">
-                  🔴 Blockers ({alert.obligation.blockers.length})
-                </Typography>
-                <List>
-                  {alert.obligation.blockers.map((blocker, index) => (
-                    <ListItem key={index} sx={{ bgcolor: '#ffebee', mb: 1, borderRadius: 1 }}>
-                      <ListItemText primary={blocker} />
-                    </ListItem>
+              {riskReport.high_risk_obligations.length === 0 ? (
+                <Alert severity="info">No high-risk obligations found.</Alert>
+              ) : (
+                <Stack spacing={2}>
+                  {riskReport.high_risk_obligations.map((obligation) => (
+                    <Paper key={obligation.id} variant="outlined" sx={{ p: 2 }}>
+                      <Typography variant="subtitle1" fontWeight="bold">
+                        {obligation.description}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Deadline: {obligation.deadline || 'Not provided'}
+                      </Typography>
+                      <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                        {obligation.risk_level && (
+                          <Chip
+                            size="small"
+                            color={obligation.risk_level === 'critical' ? 'error' : 'warning'}
+                            label={obligation.risk_level.toUpperCase()}
+                          />
+                        )}
+                        {obligation.penalty_amount_display && (
+                          <Chip size="small" color="error" label={`Penalty ${obligation.penalty_amount_display}`} />
+                        )}
+                        {typeof obligation.days_remaining === 'number' && (
+                          <Chip size="small" color="warning" label={`${obligation.days_remaining} days remaining`} />
+                        )}
+                        {typeof obligation.hours_remaining === 'number' && obligation.hours_remaining < 72 && (
+                          <Chip size="small" color="error" label={`${obligation.hours_remaining} hours remaining`} />
+                        )}
+                      </Box>
+                    </Paper>
                   ))}
-                </List>
-              </Box>
-            )}
+                </Stack>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
 
-            {/* Recommended Actions */}
-            <Box>
-              <Typography variant="h6" gutterBottom>
-                💡 Recommended Actions
+        <Grid item xs={12} md={5}>
+          <Card>
+            <CardContent>
+              <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold' }}>
+                Revenue Recovery
               </Typography>
-              <List>
-                {alert.recommended_actions.map((action, index) => (
-                  <ListItem key={index}>
-                    <Button
-                      variant="contained"
-                      color="primary"
-                      fullWidth
-                      sx={{ justifyContent: 'flex-start', textAlign: 'left' }}
-                    >
-                      {action}
-                    </Button>
-                  </ListItem>
-                ))}
-              </List>
-            </Box>
-          </CardContent>
-        </Card>
-      ))}
+              <Stack spacing={2}>
+                <Paper sx={{ p: 2, bgcolor: '#e8f5e9' }}>
+                  <Typography variant="body2" color="text.secondary">
+                    Penalties Avoided YTD
+                  </Typography>
+                  <Typography variant="h4" color="success.main">
+                    ${riskReport.financial_summary.penalties_avoided_ytd.toLocaleString()}
+                  </Typography>
+                </Paper>
+                <Paper sx={{ p: 2, bgcolor: '#e3f2fd' }}>
+                  <Typography variant="body2" color="text.secondary">
+                    Scope Creep Recovery Opportunity
+                  </Typography>
+                  <Typography variant="h4" color="primary.main">
+                    ${riskReport.financial_summary.potential_recovery.toLocaleString()}
+                  </Typography>
+                </Paper>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
 
-      {/* Financial Summary */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold' }}>
-            💰 Financial Summary
-          </Typography>
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={6}>
-              <Paper sx={{ p: 2, bgcolor: '#ffebee' }}>
-                <Typography variant="body2" color="text.secondary">
-                  Total Penalty Exposure
-                </Typography>
-                <Typography variant="h4" color="error">
-                  ${riskReport.financial_summary.total_penalty_exposure.toLocaleString()}
-                </Typography>
-              </Paper>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Paper sx={{ p: 2, bgcolor: '#fff3e0' }}>
-                <Typography variant="body2" color="text.secondary">
-                  Immediate Risk
-                </Typography>
-                <Typography variant="h4" color="warning.main">
-                  ${riskReport.financial_summary.immediate_risk.toLocaleString()}
-                </Typography>
-              </Paper>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Paper sx={{ p: 2, bgcolor: '#e8f5e9' }}>
-                <Typography variant="body2" color="text.secondary">
-                  Penalties Avoided YTD
-                </Typography>
-                <Typography variant="h4" color="success.main">
-                  ${riskReport.financial_summary.penalties_avoided_ytd.toLocaleString()}
-                </Typography>
-              </Paper>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Paper sx={{ p: 2, bgcolor: '#e3f2fd' }}>
-                <Typography variant="body2" color="text.secondary">
-                  Potential Recovery (Scope Creep)
-                </Typography>
-                <Typography variant="h4" color="primary">
-                  ${riskReport.financial_summary.potential_recovery.toLocaleString()}
-                </Typography>
-              </Paper>
-            </Grid>
-          </Grid>
-        </CardContent>
-      </Card>
-
-      {/* SLA Status */}
-      <Card>
-        <CardContent>
-          <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold' }}>
-            📈 SLA Compliance Status
+            SLA Compliance Status
           </Typography>
           <Grid container spacing={2}>
             <Grid item xs={3}>
@@ -352,23 +357,30 @@ const RiskReport: React.FC<RiskReportProps> = ({ sowId }) => {
         </CardContent>
       </Card>
 
-      {/* Pulse Animation */}
-      <style>
-        {`
-          @keyframes pulse {
-            0%, 100% {
-              box-shadow: 0 0 0 0 rgba(211, 47, 47, 0.7);
-            }
-            50% {
-              box-shadow: 0 0 0 10px rgba(211, 47, 47, 0);
-            }
-          }
-        `}
-      </style>
+      {riskReport.scope_creep_detected.length > 0 && (
+        <Card>
+          <CardContent>
+            <Typography variant="h5" gutterBottom sx={{ fontWeight: 'bold' }}>
+              Scope Creep Findings
+            </Typography>
+            <Stack spacing={2}>
+              {riskReport.scope_creep_detected.map((item, index) => (
+                <Alert key={item.id || `${index}`} severity="warning">
+                  <Typography variant="subtitle2">{item.title || 'Potential Scope Creep Detected'}</Typography>
+                  <Typography variant="body2">{item.description || 'Additional investigation recommended.'}</Typography>
+                  {(item.potential_revenue || item.cost) && (
+                    <Typography variant="body2" sx={{ mt: 1 }}>
+                      Estimated commercial value: ${(item.potential_revenue || item.cost || 0).toLocaleString()}
+                    </Typography>
+                  )}
+                </Alert>
+              ))}
+            </Stack>
+          </CardContent>
+        </Card>
+      )}
     </Box>
   );
 };
 
 export default RiskReport;
-
-// Made with Bob

@@ -10,6 +10,7 @@ from datetime import datetime
 # Import API routers
 from app.api.sow import router as sow_router
 from app.api.integrations import router as integrations_router
+from app.api.settings import router as settings_router
 
 app = FastAPI(
     title="SOW Sentinel - Demo Mode",
@@ -20,11 +21,18 @@ app = FastAPI(
 # Include routers
 app.include_router(sow_router)
 app.include_router(integrations_router)
+app.include_router(settings_router)
 
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:4173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

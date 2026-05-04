@@ -6,11 +6,14 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 import json
 import re
+import logging
 from pathlib import Path
 
-# Placeholder for watsonx.ai integration
-# from ibm_watsonx_ai import Credentials, APIClient
-# from ibm_watsonx_ai.foundation_models import Model
+from docx import Document
+import pdfplumber
+from ibm_watsonx_ai.foundation_models import ModelInference
+from ibm_watsonx_ai.metanames import GenTextParamsMetaNames as GenParams
+from ibm_watsonx_ai import Credentials
 
 from ..models.sow_models import (
     create_sow_document,
@@ -20,6 +23,9 @@ from ..models.sow_models import (
     ObligationType,
     RiskLevel
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 class IngestionAgent:
@@ -34,7 +40,13 @@ class IngestionAgent:
     5. Score risk levels for each obligation
     """
     
-    def __init__(self, watsonx_api_key: Optional[str] = None, watsonx_project_id: Optional[str] = None):
+    def __init__(
+        self,
+        watsonx_api_key: Optional[str] = None,
+        watsonx_project_id: Optional[str] = None,
+        watsonx_url: str = "https://us-south.ml.cloud.ibm.com",
+        watsonx_model_id: str = "meta-llama/llama-3-1-70b-gptq"
+    ):
         """
         Initialize the Ingestion Agent
         
@@ -44,25 +56,36 @@ class IngestionAgent:
         """
         self.watsonx_api_key = watsonx_api_key
         self.watsonx_project_id = watsonx_project_id
-        self.model = None
+        self.watsonx_url = watsonx_url
+        self.watsonx_model_id = watsonx_model_id
+        self.model: Optional[ModelInference] = None
         
-        # Initialize watsonx.ai client if credentials provided
         if watsonx_api_key and watsonx_project_id:
             self._initialize_watsonx()
     
     def _initialize_watsonx(self):
-        """Initialize watsonx.ai client"""
-        # TODO: Implement watsonx.ai initialization
-        # credentials = Credentials(
-        #     url="https://us-south.ml.cloud.ibm.com",
-        #     api_key=self.watsonx_api_key
-        # )
-        # self.model = Model(
-        #     model_id="ibm/granite-13b-chat-v2",
-        #     credentials=credentials,
-        #     project_id=self.watsonx_project_id
-        # )
-        pass
+        """Initialize watsonx.ai client."""
+        try:
+            credentials = Credentials(
+                url=self.watsonx_url,
+                api_key=self.watsonx_api_key
+            )
+            self.model = ModelInference(
+                model_id=self.watsonx_model_id,
+                credentials=credentials,
+                project_id=self.watsonx_project_id,
+                params={
+                    GenParams.DECODING_METHOD: "greedy",
+                    GenParams.MAX_NEW_TOKENS: 2048,
+                    GenParams.MIN_NEW_TOKENS: 32,
+                    GenParams.TEMPERATURE: 0,
+                    GenParams.REPETITION_PENALTY: 1.0,
+                },
+            )
+            logger.info("watsonx.ai model initialized for SOW ingestion")
+        except Exception as exc:
+            logger.exception("Failed to initialize watsonx.ai client: %s", exc)
+            self.model = None
     
     async def parse_sow_document(
         self,
@@ -124,182 +147,122 @@ class IngestionAgent:
     
     async def _extract_text(self, file_path: str) -> str:
         """
-        Extract text from PDF or DOCX file
-        
-        Args:
-            file_path: Path to file
-            
-        Returns:
-            Extracted text content
+        Extract text from PDF, DOCX, DOC, or plain text file.
         """
-        # TODO: Implement PDF/DOCX text extraction
-        # For now, return placeholder
-        return """
-        STATEMENT OF WORK
-        
-        Project: Enterprise Platform Migration
-        Client: Acme Corporation
-        Start Date: January 1, 2024
-        End Date: December 31, 2024
-        Total Value: $500,000
-        
-        DELIVERABLES:
-        
-        1. Phase 1: Database Migration
-           Deadline: March 31, 2024
-           Description: Migrate all legacy databases to cloud infrastructure
-           Penalty: $5,000 per day after deadline
-           
-        2. Phase 2: Application Modernization
-           Deadline: June 30, 2024
-           Description: Refactor applications to microservices architecture
-           Penalty: $3,000 per day after deadline
-           
-        3. UAT Sign-off Document
-           Deadline: May 15, 2024
-           Description: Complete User Acceptance Testing documentation
-           Penalty: $1,000 per day after deadline
-           
-        SLA REQUIREMENTS:
-        
-        1. Incident Response Time: 4 hours
-           Measurement: Monthly average
-           Penalty: $1,000 per breach
-           
-        2. System Uptime: 99.9%
-           Measurement: Monthly
-           Penalty: $2,000 per 0.1% below target
-           
-        3. Resolution Time: 24 hours for critical issues
-           Measurement: Per incident
-           Penalty: $500 per hour over target
-           
-        SUPPORT:
-        Reasonable efforts will be made to optimize performance.
-        Best practices will be followed for security implementation.
-        """
+        path = Path(file_path)
+        suffix = path.suffix.lower()
+
+        if suffix == ".pdf":
+            extracted_pages: List[str] = []
+            with pdfplumber.open(file_path) as pdf:
+                for page in pdf.pages:
+                    page_text = page.extract_text() or ""
+                    if page_text.strip():
+                        extracted_pages.append(page_text)
+            text_content = "\n\n".join(extracted_pages)
+        elif suffix in {".docx", ".doc"}:
+            document = Document(file_path)
+            text_content = "\n".join(
+                paragraph.text for paragraph in document.paragraphs if paragraph.text.strip()
+            )
+        else:
+            text_content = path.read_text(encoding="utf-8", errors="ignore")
+
+        text_content = text_content.strip()
+        if not text_content:
+            raise ValueError(f"No text could be extracted from {path.name}")
+
+        return text_content
     
     async def _parse_with_watsonx(self, text_content: str) -> Dict[str, Any]:
         """
-        Use watsonx.ai to parse SOW text into structured data
-        
-        Args:
-            text_content: Raw text from SOW
-            
-        Returns:
-            Structured data dictionary
+        Use watsonx.ai to parse SOW text into structured data.
+        Falls back to deterministic extraction if model invocation fails.
         """
+        prompt = self._create_parsing_prompt(text_content)
+
         if self.model:
-            # TODO: Implement actual watsonx.ai parsing
-            prompt = self._create_parsing_prompt(text_content)
-            # response = self.model.generate(prompt)
-            # return json.loads(response)
-            pass
-        
-        # Demo mode: Return structured data
-        return {
-            "start_date": "2024-01-01",
-            "end_date": "2024-12-31",
-            "total_value": 500000,
-            "currency": "USD",
-            "description": "Enterprise Platform Migration",
-            "deliverables": [
-                {
-                    "name": "Phase 1: Database Migration",
-                    "deadline": "2024-03-31",
-                    "description": "Migrate all legacy databases to cloud infrastructure",
-                    "penalty_amount": 5000,
-                    "penalty_frequency": "per_day"
-                },
-                {
-                    "name": "Phase 2: Application Modernization",
-                    "deadline": "2024-06-30",
-                    "description": "Refactor applications to microservices architecture",
-                    "penalty_amount": 3000,
-                    "penalty_frequency": "per_day"
-                },
-                {
-                    "name": "UAT Sign-off Document",
-                    "deadline": "2024-05-15",
-                    "description": "Complete User Acceptance Testing documentation",
-                    "penalty_amount": 1000,
-                    "penalty_frequency": "per_day"
-                }
-            ],
-            "sla_metrics": [
-                {
-                    "metric_name": "Incident Response Time",
-                    "target_value": 4,
-                    "unit": "hours",
-                    "measurement_period": "monthly",
-                    "penalty_amount": 1000
-                },
-                {
-                    "metric_name": "System Uptime",
-                    "target_value": 99.9,
-                    "unit": "percentage",
-                    "measurement_period": "monthly",
-                    "penalty_amount": 2000
-                },
-                {
-                    "metric_name": "Resolution Time",
-                    "target_value": 24,
-                    "unit": "hours",
-                    "measurement_period": "per_incident",
-                    "penalty_amount": 500
-                }
-            ],
-            "vague_clauses": [
-                {
-                    "clause": "Reasonable efforts will be made to optimize performance",
-                    "risk": "Undefined success criteria - no specific performance metrics",
-                    "recommendation": "Request specific performance benchmarks (e.g., response time < 200ms)"
-                },
-                {
-                    "clause": "Best practices will be followed for security implementation",
-                    "risk": "Ambiguous security requirements",
-                    "recommendation": "Define specific security standards (e.g., OWASP Top 10, SOC 2)"
-                }
-            ]
-        }
+            try:
+                response = self.model.generate_text(prompt=prompt)
+                parsed = self._extract_json_from_response(response)
+                return self._normalize_parsed_data(parsed)
+            except Exception as exc:
+                logger.exception("watsonx.ai parsing failed, falling back to heuristic extraction: %s", exc)
+
+        logger.warning("Using heuristic parsing fallback because watsonx.ai output was unavailable")
+        return self._heuristic_parse_text(text_content)
     
     def _create_parsing_prompt(self, text_content: str) -> str:
-        """Create prompt for watsonx.ai to parse SOW"""
+        """Create prompt for watsonx.ai to parse SOW."""
         return f"""
-        You are an expert contract analyst. Parse the following Statement of Work (SOW) and extract:
-        
-        1. Basic Information:
-           - Start date
-           - End date
-           - Total contract value
-           - Currency
-           - Project description
-        
-        2. Deliverables and Milestones:
-           - Name/description
-           - Deadline
-           - Penalty amount and frequency
-           - Risk level (critical/high/medium/low)
-        
-        3. SLA Metrics:
-           - Metric name
-           - Target value
-           - Unit of measurement
-           - Measurement period
-           - Penalty amount
-        
-        4. Vague Clauses:
-           - Identify any ambiguous or undefined terms
-           - Explain the risk
-           - Provide recommendations
-        
-        Return the data as a JSON object.
-        
-        SOW TEXT:
-        {text_content}
-        
-        JSON OUTPUT:
-        """
+You are a senior contract risk analyst reviewing a Statement of Work for delivery, commercial, legal, and operational risk.
+
+Return ONLY valid JSON. Do not add markdown, comments, or explanation text.
+
+Use this exact JSON schema:
+{{
+  "start_date": "ISO date string or empty string",
+  "end_date": "ISO date string or empty string",
+  "total_value": 0,
+  "currency": "USD",
+  "description": "short project summary",
+  "deliverables": [
+    {{
+      "name": "deliverable name",
+      "deadline": "ISO date string or empty string",
+      "description": "deliverable description",
+      "penalty_amount": 0,
+      "penalty_frequency": "per_day|per_hour|per_breach|one_time|unknown"
+    }}
+  ],
+  "sla_metrics": [
+    {{
+      "metric_name": "metric",
+      "target_value": 0,
+      "unit": "hours|percentage|days|minutes|tickets|unknown",
+      "measurement_period": "monthly|weekly|daily|per_incident|quarterly|unknown",
+      "penalty_amount": 0
+    }}
+  ],
+  "vague_clauses": [
+    {{
+      "clause": "original clause text",
+      "risk": "why it is risky",
+      "recommendation": "how to clarify it"
+    }}
+  ]
+}}
+
+Extraction requirements:
+- Extract ALL meaningful vague, ambiguous, subjective, under-specified, one-sided, risky, or commercially dangerous clauses.
+- Do not limit vague_clauses to style issues only. Include delivery risk, acceptance ambiguity, dependency ambiguity, resourcing ambiguity, support ambiguity, liability exposure, payment ambiguity, and change-request ambiguity.
+- Capture clauses even if they are not explicitly labeled as risks.
+- Prefer more coverage rather than fewer items when a clause may create delivery dispute, missed SLA, hidden scope, revenue leakage, or unbounded obligations.
+- Preserve the original clause text as closely as possible.
+
+Specifically look for clauses involving:
+- reasonable efforts, best efforts, commercially reasonable efforts
+- as needed, as required, where necessary, as appropriate, from time to time
+- promptly, timely, without undue delay, soon as possible
+- high quality, industry standard, best practice, acceptable, satisfactory
+- support, assist, collaborate, coordinate, enable, maintain without measurable limits
+- client dependencies, third-party dependencies, shared responsibilities, assumptions
+- unclear acceptance criteria, unclear completion criteria, unclear sign-off criteria
+- unlimited revisions, ongoing support, future enhancements, additional requests
+- penalties, service credits, indemnities, liabilities, uncapped obligations
+- terms that lack numeric thresholds, deadlines, owners, exclusions, or measurable outcomes
+
+Rules:
+- Infer dates into ISO format when possible.
+- Extract numeric currency values without symbols or commas.
+- If a value is missing, use empty string for strings and 0 for numbers.
+- For vague_clauses, include every distinct risky clause you find, not just the top 3.
+- If a clause contains measurable criteria and is not ambiguous, do not include it in vague_clauses.
+- If there are 8-15 vague or risky clauses in the document, return all of them.
+
+SOW TEXT:
+{text_content}
+"""
     
     async def _extract_obligations(
         self,
@@ -377,6 +340,220 @@ class IngestionAgent:
         
         return vague_clauses
     
+    def _extract_json_from_response(self, response_text: str) -> Dict[str, Any]:
+        """Extract JSON object from model output."""
+        if not response_text:
+            raise ValueError("Empty response returned from watsonx.ai")
+
+        cleaned = response_text.strip()
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
+            cleaned = re.sub(r"\s*```$", "", cleaned)
+
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError:
+            match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+            if not match:
+                raise
+            return json.loads(match.group(0))
+
+    def _normalize_parsed_data(self, parsed_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Normalize model output to expected structure."""
+        return {
+            "start_date": parsed_data.get("start_date") or "",
+            "end_date": parsed_data.get("end_date") or "",
+            "total_value": self._to_number(parsed_data.get("total_value")),
+            "currency": parsed_data.get("currency") or "USD",
+            "description": parsed_data.get("description") or "",
+            "deliverables": [
+                {
+                    "name": item.get("name", ""),
+                    "deadline": item.get("deadline", ""),
+                    "description": item.get("description", item.get("name", "")),
+                    "penalty_amount": self._to_number(item.get("penalty_amount")),
+                    "penalty_frequency": item.get("penalty_frequency", "unknown"),
+                }
+                for item in parsed_data.get("deliverables", [])
+                if isinstance(item, dict)
+            ],
+            "sla_metrics": [
+                {
+                    "metric_name": item.get("metric_name", ""),
+                    "target_value": self._to_number(item.get("target_value")),
+                    "unit": item.get("unit", "unknown"),
+                    "measurement_period": item.get("measurement_period", "unknown"),
+                    "penalty_amount": self._to_number(item.get("penalty_amount")),
+                }
+                for item in parsed_data.get("sla_metrics", [])
+                if isinstance(item, dict)
+            ],
+            "vague_clauses": [
+                {
+                    "clause": item.get("clause", ""),
+                    "risk": item.get("risk", ""),
+                    "recommendation": item.get("recommendation", ""),
+                }
+                for item in parsed_data.get("vague_clauses", [])
+                if isinstance(item, dict)
+            ],
+        }
+
+    def _heuristic_parse_text(self, text_content: str) -> Dict[str, Any]:
+        """Fallback parser when model extraction is unavailable."""
+        start_date = self._search_date(text_content, r"Start Date\s*:\s*(.+)")
+        end_date = self._search_date(text_content, r"End Date\s*:\s*(.+)")
+        total_value = self._search_money(text_content, r"Total Value\s*:\s*\$?([\d,]+(?:\.\d+)?)")
+        description = self._search_text(text_content, r"Project\s*:\s*(.+)")
+        currency = "USD"
+
+        deliverables = []
+        deliverable_pattern = re.compile(
+            r"\d+\.\s*(?P<name>.+?)\n\s*Deadline:\s*(?P<deadline>.+?)\n\s*Description:\s*(?P<description>.+?)\n\s*Penalty:\s*\$?(?P<penalty>[\d,]+)(?:\s*per\s*(?P<frequency>\w+))?",
+            re.IGNORECASE | re.MULTILINE,
+        )
+        for match in deliverable_pattern.finditer(text_content):
+            deliverables.append(
+                {
+                    "name": match.group("name").strip(),
+                    "deadline": self._coerce_date(match.group("deadline").strip()),
+                    "description": match.group("description").strip(),
+                    "penalty_amount": self._to_number(match.group("penalty")),
+                    "penalty_frequency": f"per_{(match.group('frequency') or 'day').lower()}",
+                }
+            )
+
+        sla_metrics = []
+        sla_pattern = re.compile(
+            r"\d+\.\s*(?P<metric>.+?):\s*(?P<target>[\d.]+)\s*(?P<unit>\w+)\n\s*Measurement:\s*(?P<period>.+?)\n\s*Penalty:\s*\$?(?P<penalty>[\d,]+)",
+            re.IGNORECASE | re.MULTILINE,
+        )
+        for match in sla_pattern.finditer(text_content):
+            sla_metrics.append(
+                {
+                    "metric_name": match.group("metric").strip(),
+                    "target_value": self._to_number(match.group("target")),
+                    "unit": match.group("unit").strip().lower(),
+                    "measurement_period": match.group("period").strip().lower().replace(" ", "_"),
+                    "penalty_amount": self._to_number(match.group("penalty")),
+                }
+            )
+
+        vague_patterns = [
+            (
+                re.compile(r"\b(reasonable efforts|commercially reasonable efforts|best efforts)\b", re.IGNORECASE),
+                "Subjective effort standard with no measurable baseline.",
+                "Define concrete actions, timelines, and acceptance criteria instead of effort-based wording.",
+            ),
+            (
+                re.compile(r"\b(as needed|as required|where necessary|as appropriate|from time to time)\b", re.IGNORECASE),
+                "Open-ended obligation that can expand scope without clear limits.",
+                "Specify exact triggers, ownership, limits, and quantity/frequency boundaries.",
+            ),
+            (
+                re.compile(r"\b(promptly|timely|without undue delay|as soon as possible|soon)\b", re.IGNORECASE),
+                "Timing commitment is vague and may create disputes over response obligations.",
+                "Replace with a defined SLA or exact turnaround time.",
+            ),
+            (
+                re.compile(r"\b(high quality|industry standard|best practice|acceptable|satisfactory)\b", re.IGNORECASE),
+                "Quality standard is subjective and lacks measurable acceptance criteria.",
+                "Define measurable quality metrics, review process, and sign-off standards.",
+            ),
+            (
+                re.compile(r"\b(support|assist|collaborate|coordinate|enable|maintain)\b", re.IGNORECASE),
+                "Responsibility may be too broad without defining scope, duration, or exclusions.",
+                "Clarify the exact support scope, service window, owner, and exclusions.",
+            ),
+            (
+                re.compile(r"\b(dependency|dependencies|assumption|assumptions|client to provide|provided by client|third[- ]party)\b", re.IGNORECASE),
+                "Dependency or assumption risk may shift delivery responsibility without clear accountability.",
+                "List each dependency, responsible party, due date, and impact if not met.",
+            ),
+            (
+                re.compile(r"\b(acceptance|sign-?off|complete(?:d|ion)? criteria)\b", re.IGNORECASE),
+                "Acceptance process may be unclear or missing objective completion standards.",
+                "Define acceptance tests, reviewer, review period, and auto-acceptance conditions.",
+            ),
+            (
+                re.compile(r"\b(unlimited|ongoing|future enhancements|additional requests|change request)\b", re.IGNORECASE),
+                "Potential scope-creep language without commercial or delivery controls.",
+                "Add change-control process, pricing guardrails, approval flow, and out-of-scope boundaries.",
+            ),
+            (
+                re.compile(r"\b(indemnif|liab(?:ility)?|penalt(?:y|ies)|service credit)\b", re.IGNORECASE),
+                "Commercial exposure may be one-sided or uncapped.",
+                "Clarify caps, exclusions, triggering events, and aggregate liability limits.",
+            ),
+        ]
+
+        vague_clauses = []
+        seen_clauses = set()
+        for raw_line in text_content.splitlines():
+            normalized_line = re.sub(r"\s+", " ", raw_line).strip(" \t-•*")
+            if len(normalized_line) < 20:
+                continue
+
+            for pattern, risk, recommendation in vague_patterns:
+                if pattern.search(normalized_line):
+                    dedupe_key = normalized_line.lower()
+                    if dedupe_key in seen_clauses:
+                        break
+                    seen_clauses.add(dedupe_key)
+                    vague_clauses.append(
+                        {
+                            "clause": normalized_line,
+                            "risk": risk,
+                            "recommendation": recommendation,
+                        }
+                    )
+                    break
+
+        return {
+            "start_date": start_date,
+            "end_date": end_date,
+            "total_value": total_value,
+            "currency": currency,
+            "description": description,
+            "deliverables": deliverables,
+            "sla_metrics": sla_metrics,
+            "vague_clauses": vague_clauses,
+        }
+
+    def _search_text(self, text_content: str, pattern: str) -> str:
+        match = re.search(pattern, text_content, re.IGNORECASE)
+        return match.group(1).strip() if match else ""
+
+    def _search_money(self, text_content: str, pattern: str) -> float:
+        match = re.search(pattern, text_content, re.IGNORECASE)
+        return self._to_number(match.group(1)) if match else 0
+
+    def _search_date(self, text_content: str, pattern: str) -> str:
+        match = re.search(pattern, text_content, re.IGNORECASE)
+        return self._coerce_date(match.group(1).strip()) if match else ""
+
+    def _coerce_date(self, raw_value: str) -> str:
+        raw_value = raw_value.strip()
+        for fmt in ("%B %d, %Y", "%b %d, %Y", "%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y"):
+            try:
+                return datetime.strptime(raw_value, fmt).date().isoformat()
+            except ValueError:
+                continue
+        return raw_value
+
+    def _to_number(self, value: Any) -> float:
+        if value is None:
+            return 0
+        if isinstance(value, (int, float)):
+            return float(value)
+        cleaned = re.sub(r"[^\d.]", "", str(value))
+        if not cleaned:
+            return 0
+        try:
+            return float(cleaned)
+        except ValueError:
+            return 0
+
     def _calculate_financial_summary(
         self,
         obligations: List[Dict[str, Any]],

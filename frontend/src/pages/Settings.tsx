@@ -57,22 +57,64 @@ const Settings: React.FC = () => {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    // Load settings from localStorage
-    const savedSettings = localStorage.getItem('api_settings');
-    if (savedSettings) {
-      setSettings(JSON.parse(savedSettings));
-    }
+    const loadSettings = async () => {
+      try {
+        const response = await fetch('http://localhost:8000/api/v1/settings');
+        if (!response.ok) {
+          throw new Error('Failed to load settings');
+        }
+
+        const data = await response.json();
+        if (data?.settings) {
+          setSettings({
+            github_token: data.settings.github_token || '',
+            github_owner: data.settings.github_owner || '',
+            github_repo: data.settings.github_repo || '',
+            slack_bot_token: data.settings.slack_bot_token || '',
+            slack_workspace_id: data.settings.slack_workspace_id || '',
+            microsoft_client_id: data.settings.microsoft_client_id || '',
+            microsoft_client_secret: data.settings.microsoft_client_secret || '',
+            microsoft_tenant_id: data.settings.microsoft_tenant_id || '',
+          });
+          localStorage.setItem('api_settings', JSON.stringify(data.settings));
+          return;
+        }
+
+        const savedSettings = localStorage.getItem('api_settings');
+        if (savedSettings) {
+          setSettings(JSON.parse(savedSettings));
+        }
+      } catch (err) {
+        const savedSettings = localStorage.getItem('api_settings');
+        if (savedSettings) {
+          setSettings(JSON.parse(savedSettings));
+        }
+      }
+    };
+
+    loadSettings();
   }, []);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     try {
-      // Save to localStorage
-      localStorage.setItem('api_settings', JSON.stringify(settings));
+      const response = await fetch('http://localhost:8000/api/v1/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save settings');
+      }
+
+      const data = await response.json();
+      localStorage.setItem('api_settings', JSON.stringify(data.settings || settings));
       setSaved(true);
       setError('');
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
-      setError('Failed to save settings');
+      localStorage.setItem('api_settings', JSON.stringify(settings));
+      setError('Failed to save settings to backend. Saved locally only.');
     }
   };
 
@@ -91,10 +133,10 @@ const Settings: React.FC = () => {
       {/* Header */}
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" gutterBottom>
-          API Configuration Settings
+          Global Credential Settings
         </Typography>
         <Typography variant="body1" color="text.secondary">
-          Configure your API keys and credentials for GitHub, Slack, and Outlook integrations
+          Store shared API credentials here. Repository mapping, channels, stakeholders, labels, and issue automation are configured per SOW in the integrations flow.
         </Typography>
       </Box>
 
@@ -115,7 +157,7 @@ const Settings: React.FC = () => {
         <CardContent>
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
             <GitHub sx={{ mr: 2, fontSize: 32 }} />
-            <Typography variant="h6">GitHub Configuration</Typography>
+            <Typography variant="h6">GitHub Credentials</Typography>
           </Box>
           
           <Grid container spacing={3}>
@@ -158,7 +200,7 @@ const Settings: React.FC = () => {
                 value={settings.github_repo}
                 onChange={handleChange('github_repo')}
                 placeholder="repository-name"
-                helperText="Default repository for SOW tracking"
+                helperText="Optional default repository. Final repository selection should be defined per SOW."
               />
             </Grid>
           </Grid>
@@ -170,7 +212,7 @@ const Settings: React.FC = () => {
         <CardContent>
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
             <Chat sx={{ mr: 2, fontSize: 32 }} />
-            <Typography variant="h6">Slack Configuration</Typography>
+            <Typography variant="h6">Slack Credentials</Typography>
           </Box>
           
           <Grid container spacing={3}>
@@ -214,7 +256,7 @@ const Settings: React.FC = () => {
         <CardContent>
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
             <Email sx={{ mr: 2, fontSize: 32 }} />
-            <Typography variant="h6">Microsoft Graph API (Outlook)</Typography>
+            <Typography variant="h6">Microsoft Graph Credentials</Typography>
           </Box>
           
           <Grid container spacing={3}>
@@ -267,12 +309,12 @@ const Settings: React.FC = () => {
       {/* Setup Instructions */}
       <Paper sx={{ p: 3, mb: 3, bgcolor: 'background.default' }}>
         <Typography variant="h6" gutterBottom>
-          Setup Instructions
+          Configuration Guidance
         </Typography>
         <Divider sx={{ my: 2 }} />
         
         <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>
-          GitHub Personal Access Token:
+          GitHub:
         </Typography>
         <Typography variant="body2" color="text.secondary" paragraph>
           1. Go to GitHub Settings → Developer settings → Personal access tokens<br />
@@ -282,7 +324,7 @@ const Settings: React.FC = () => {
         </Typography>
 
         <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>
-          Slack Bot Token:
+          Slack:
         </Typography>
         <Typography variant="body2" color="text.secondary" paragraph>
           1. Go to api.slack.com → Your Apps<br />
@@ -293,7 +335,7 @@ const Settings: React.FC = () => {
         </Typography>
 
         <Typography variant="subtitle2" gutterBottom sx={{ mt: 2 }}>
-          Microsoft Graph API:
+          Outlook / Microsoft Graph:
         </Typography>
         <Typography variant="body2" color="text.secondary" paragraph>
           1. Go to Azure Portal → Azure Active Directory<br />
@@ -302,6 +344,9 @@ const Settings: React.FC = () => {
           4. Certificates & secrets → New client secret<br />
           5. Copy Application ID, Tenant ID, and Client Secret
         </Typography>
+        <Alert severity="info" sx={{ mt: 2 }}>
+          Use [`frontend/src/pages/IntegrationConfig.tsx`](frontend/src/pages/IntegrationConfig.tsx) to create SOW-specific labels, milestones, issue plans, Slack channels, and Outlook stakeholders.
+        </Alert>
       </Paper>
 
       {/* Save Button */}
