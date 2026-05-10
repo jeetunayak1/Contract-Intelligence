@@ -44,6 +44,11 @@ class CloudantDatabase:
     def _initialize_ibm_client(self):
         """Initialize Cloudant client with IAM authentication"""
         try:
+            if not settings.CLOUDANT_API_KEY or settings.CLOUDANT_API_KEY == "your-cloudant-api-key":
+                raise ValueError("CLOUDANT_API_KEY is not configured. Please set it in your .env file.")
+            if not settings.CLOUDANT_URL or settings.CLOUDANT_URL == "https://your-account.cloudantnosqldb.appdomain.cloud":
+                raise ValueError("CLOUDANT_URL is not configured. Please set it in your .env file.")
+            
             authenticator = IAMAuthenticator(settings.CLOUDANT_API_KEY)
             self.client = CloudantV1(authenticator=authenticator)
             self.client.set_service_url(settings.CLOUDANT_URL)

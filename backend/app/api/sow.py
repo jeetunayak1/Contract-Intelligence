@@ -25,7 +25,7 @@ from ..models.sow_models import (
     AlertSeverity
 )
 
-router = APIRouter(prefix="/api/v1/sow", tags=["SOW Management"])
+router = APIRouter(tags=["SOW Management"])
 
 # Initialize agents
 ingestion_agent = IngestionAgent(

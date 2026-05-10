@@ -10,7 +10,7 @@ from typing import AsyncGenerator
 
 from app.core.config import settings
 from app.core.cloudant_db import init_cloudant
-from app.api import contracts, compliance, risks, alerts, analytics
+from app.api import sow
 
 # Configure logging
 logging.basicConfig(
@@ -104,11 +104,7 @@ async def root():
 
 
 # Include routers
-app.include_router(contracts.router, prefix="/api/contracts", tags=["Contracts"])
-app.include_router(compliance.router, prefix="/api/compliance", tags=["Compliance"])
-app.include_router(risks.router, prefix="/api/risks", tags=["Risks"])
-app.include_router(alerts.router, prefix="/api/alerts", tags=["Alerts"])
-app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics"])
+app.include_router(sow.router, prefix="/api/v1/sow", tags=["SOW"])
 
 
 if __name__ == "__main__":
