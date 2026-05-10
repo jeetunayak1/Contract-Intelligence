@@ -33,10 +33,20 @@ class Settings(BaseSettings):
             return [origin.strip() for origin in v.split(",")]
         return v
     
+    # Provider Selection (ibm or gcp)
+    DB_PROVIDER: str = "ibm"
+    LLM_PROVIDER: str = "ibm"
+
     # IBM Cloudant Database
     CLOUDANT_URL: str = ""
     CLOUDANT_API_KEY: str = ""
     CLOUDANT_DB_NAME: str = "contract-intelligence"
+    
+    # Google Cloud Platform (Firestore & Gemini)
+    GCP_PROJECT_ID: str = ""
+    GCP_LOCATION: str = "us-central1"
+    FIRESTORE_DB_NAME: str = "(default)"
+    GEMINI_MODEL_ID: str = "gemini-1.5-pro-002"
     
     # IBM watsonx.ai
     WATSONX_API_KEY: str = ""

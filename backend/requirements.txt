@@ -6,14 +6,14 @@ pydantic==2.5.3
 pydantic-settings==2.1.0
 
 # Database - IBM Cloudant
-ibmcloudant==0.7.0
+ibmcloudant>=0.8.0
 cloudant==2.15.0
 
 # IBM Cloud Services
 ibm-watson==8.0.0
-ibm-watsonx-ai==0.2.6
-ibm-cloud-sdk-core==3.19.0
-ibm-platform-services==0.53.0
+ibm-watsonx-ai>=0.2.6
+ibm-cloud-sdk-core>=3.17.2
+ibm-platform-services>=0.53.0
 
 # AI and ML
 langchain==0.1.0
@@ -60,3 +60,5 @@ faker==22.0.0
 # Utilities
 python-slugify==8.0.1
 pytz==2023.3
+google-cloud-firestore==2.14.0
+google-genai==0.3.0

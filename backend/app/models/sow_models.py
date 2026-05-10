@@ -129,7 +129,8 @@ def create_sow_document(
         "created_at": kwargs.get("created_at", datetime.utcnow().isoformat()),
         "updated_at": kwargs.get("updated_at", datetime.utcnow().isoformat()),
         "parsed_at": kwargs.get("parsed_at"),
-        "parsed_by": kwargs.get("parsed_by", "ingestion_agent")
+        "parsed_by": kwargs.get("parsed_by", "ingestion_agent"),
+        "active_agent": kwargs.get("active_agent")
     }
     
     return {k: v for k, v in doc.items() if v is not None}

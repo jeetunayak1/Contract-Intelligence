@@ -11,9 +11,25 @@ from pathlib import Path
 
 from docx import Document
 import pdfplumber
-from ibm_watsonx_ai.foundation_models import ModelInference
-from ibm_watsonx_ai.metanames import GenTextParamsMetaNames as GenParams
-from ibm_watsonx_ai import Credentials
+try:
+    from ibm_watsonx_ai.foundation_models import ModelInference
+    from ibm_watsonx_ai.metanames import GenTextParamsMetaNames as GenParams
+    from ibm_watsonx_ai import Credentials
+except ImportError:
+    ModelInference = None
+    GenParams = None
+    Credentials = None
+
+# Google GenAI imports
+try:
+    from google import genai
+    from google.genai import types
+except ImportError:
+    genai = None
+    types = None
+
+from ..core.config import settings
+from .transformation_agent import transformation_agent
 
 from ..models.sow_models import (
     create_sow_document,
@@ -59,9 +75,15 @@ class IngestionAgent:
         self.watsonx_url = watsonx_url
         self.watsonx_model_id = watsonx_model_id
         self.model: Optional[ModelInference] = None
+        self.gemini_client = None
         
-        if watsonx_api_key and watsonx_project_id:
-            self._initialize_watsonx()
+        self.llm_provider = settings.LLM_PROVIDER.lower()
+        
+        if self.llm_provider == "ibm":
+            if watsonx_api_key and watsonx_project_id:
+                self._initialize_watsonx()
+        elif self.llm_provider == "gcp":
+            self._initialize_gemini()
     
     def _initialize_watsonx(self):
         """Initialize watsonx.ai client."""
@@ -86,6 +108,20 @@ class IngestionAgent:
         except Exception as exc:
             logger.exception("Failed to initialize watsonx.ai client: %s", exc)
             self.model = None
+
+    def _initialize_gemini(self):
+        """Initialize Google GenAI client."""
+        try:
+            # Initialize with Vertex AI since user has GCP Service Account Key
+            self.gemini_client = genai.Client(
+                vertexai=True,
+                project=settings.GCP_PROJECT_ID,
+                location=settings.GCP_LOCATION
+            )
+            logger.info("Google GenAI client initialized for SOW ingestion using Vertex AI")
+        except Exception as exc:
+            logger.exception("Failed to initialize Google GenAI client: %s", exc)
+            self.gemini_client = None
     
     async def parse_sow_document(
         self,
@@ -109,8 +145,16 @@ class IngestionAgent:
         # Step 1: Extract text from document
         text_content = await self._extract_text(file_path)
         
-        # Step 2: Use watsonx.ai to parse structured data
-        parsed_data = await self._parse_with_watsonx(text_content)
+        # Step 1.5: Multi-Agent Orchestrator - Classification
+        classification = self._classification_agent(text_content)
+        if classification == "T&M":
+            active_agent = "Revenue Optimizer Agent"
+        else:
+            active_agent = "Risk Mitigation Agent"
+        logger.info(f"Classification Agent identified SOW as {classification}. Routing to {active_agent}.")
+        
+        # Step 2: Use LLM to parse structured data
+        parsed_data = await self._parse_with_llm(text_content, active_agent)
         
         # Step 3: Extract obligations
         obligations = await self._extract_obligations(parsed_data, sow_number)
@@ -123,6 +167,15 @@ class IngestionAgent:
         
         # Step 6: Calculate financial summary
         financial_summary = self._calculate_financial_summary(obligations, sla_terms)
+        
+        # Step 6.5: Transform T&M to Outcome-Based if needed
+        transformation_plan = None
+        if active_agent == "Revenue Optimizer Agent":
+            try:
+                transformation_plan = await transformation_agent.transform_tm_to_outcome(parsed_data, text_content)
+                logger.info("Transformation Agent generated outcome-based rewrite plan.")
+            except Exception as e:
+                logger.error(f"Transformation Agent failed: {e}")
         
         # Step 7: Create SOW document
         sow_doc = create_sow_document(
@@ -140,10 +193,31 @@ class IngestionAgent:
             financial_summary=financial_summary,
             file_url=file_path,
             file_name=Path(file_path).name,
-            parsed_at=datetime.utcnow().isoformat()
+            parsed_at=datetime.utcnow().isoformat(),
+            active_agent=active_agent
         )
         
+        if transformation_plan:
+            sow_doc["transformation_plan"] = transformation_plan
+            
         return sow_doc
+        
+    def _classification_agent(self, text: str) -> str:
+        """
+        Classification Agent: Analyzes the text for keywords like 'FTE', 'Hourly Rate', and 'T&M' 
+        vs 'Milestone', 'KPI', and 'Deliverable'.
+        """
+        text_lower = text.lower()
+        tm_keywords = ['fte', 'hourly rate', 't&m', 'time and material', 'time & material']
+        outcome_keywords = ['milestone', 'kpi', 'deliverable', 'fixed price', 'outcome-based', 'outcome based']
+        
+        tm_count = sum(text_lower.count(k) for k in tm_keywords)
+        outcome_count = sum(text_lower.count(k) for k in outcome_keywords)
+        
+        if tm_count > 0 and tm_count >= outcome_count:
+            return "T&M"
+        else:
+            return "Outcome-Based"
     
     async def _extract_text(self, file_path: str) -> str:
         """
@@ -174,28 +248,71 @@ class IngestionAgent:
 
         return text_content
     
-    async def _parse_with_watsonx(self, text_content: str) -> Dict[str, Any]:
+    async def _parse_with_llm(self, text_content: str, active_agent: str = "Risk Mitigation Agent") -> Dict[str, Any]:
         """
-        Use watsonx.ai to parse SOW text into structured data.
+        Use LLM (watsonx.ai or Gemini) to parse SOW text into structured data.
         Falls back to deterministic extraction if model invocation fails.
         """
-        prompt = self._create_parsing_prompt(text_content)
+        prompt = self._create_parsing_prompt(text_content, active_agent)
 
-        if self.model:
+        if self.llm_provider == "ibm" and self.model:
             try:
                 response = self.model.generate_text(prompt=prompt)
                 parsed = self._extract_json_from_response(response)
                 return self._normalize_parsed_data(parsed)
             except Exception as exc:
                 logger.exception("watsonx.ai parsing failed, falling back to heuristic extraction: %s", exc)
+                
+        elif self.llm_provider == "gcp" and self.gemini_client:
+            try:
+                model_id = settings.GEMINI_MODEL_ID
+                # Set a timeout for the AI call to avoid hanging
+                import asyncio
+                response = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        self.gemini_client.models.generate_content,
+                        model=model_id,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            temperature=0,
+                            response_mime_type="application/json",
+                        )
+                    ),
+                    timeout=30.0
+                )
+                parsed = self._extract_json_from_response(response.text)
+                return self._normalize_parsed_data(parsed)
+            except Exception as exc:
+                logger.error(f"Gemini parsing failed (Real AI call failed): {exc}")
+                if "PERMISSION_DENIED" in str(exc):
+                    logger.error("TIP: Enable 'Vertex AI API' in GCP console or check project permissions.")
 
-        logger.warning("Using heuristic parsing fallback because watsonx.ai output was unavailable")
+        logger.warning("Using heuristic parsing fallback because LLM output was unavailable")
         return self._heuristic_parse_text(text_content)
     
-    def _create_parsing_prompt(self, text_content: str) -> str:
-        """Create prompt for watsonx.ai to parse SOW."""
+    def _create_parsing_prompt(self, text_content: str, active_agent: str) -> str:
+        """Create prompt for LLM to parse SOW based on the active agent."""
+        
+        if active_agent == "Revenue Optimizer Agent":
+            agent_role = "You are a Revenue Optimizer Agent analyzing a Time & Materials (T&M) Statement of Work."
+            extraction_focus = """
+Extraction requirements:
+- Focus heavily on identifying revenue leakages, unbilled FTE hours, and scope creep risks.
+- Suggest Outcome-Based conversions where appropriate.
+- Extract any vague clauses that could lead to unbillable work or margin erosion.
+- Recommend ways to convert hourly-rate tasks into fixed-price or milestone-based deliverables.
+"""
+        else:
+            agent_role = "You are a Risk Mitigation Agent analyzing an Outcome-Based Statement of Work."
+            extraction_focus = """
+Extraction requirements:
+- Extract ALL meaningful vague, ambiguous, subjective, under-specified, one-sided, risky, or commercially dangerous clauses.
+- Focus heavily on vague acceptance criteria, liability traps, and delivery risks.
+- Capture clauses involving unlimited revisions, uncapped liabilities, or subjective sign-off criteria.
+"""
+
         return f"""
-You are a senior contract risk analyst reviewing a Statement of Work for delivery, commercial, legal, and operational risk.
+{agent_role}
 
 Return ONLY valid JSON. Do not add markdown, comments, or explanation text.
 
@@ -233,12 +350,7 @@ Use this exact JSON schema:
   ]
 }}
 
-Extraction requirements:
-- Extract ALL meaningful vague, ambiguous, subjective, under-specified, one-sided, risky, or commercially dangerous clauses.
-- Do not limit vague_clauses to style issues only. Include delivery risk, acceptance ambiguity, dependency ambiguity, resourcing ambiguity, support ambiguity, liability exposure, payment ambiguity, and change-request ambiguity.
-- Capture clauses even if they are not explicitly labeled as risks.
-- Prefer more coverage rather than fewer items when a clause may create delivery dispute, missed SLA, hidden scope, revenue leakage, or unbounded obligations.
-- Preserve the original clause text as closely as possible.
+{extraction_focus}
 
 Specifically look for clauses involving:
 - reasonable efforts, best efforts, commercially reasonable efforts

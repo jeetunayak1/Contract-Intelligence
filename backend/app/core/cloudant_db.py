@@ -1,8 +1,20 @@
 """
 IBM Cloudant database configuration and connection management
 """
-from ibmcloudant.cloudant_v1 import CloudantV1, Document
-from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
+try:
+    from ibmcloudant.cloudant_v1 import CloudantV1, Document
+    from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
+except ImportError:
+    CloudantV1 = None
+    Document = None
+    IAMAuthenticator = None
+
+# Google Firestore imports
+try:
+    from google.cloud import firestore
+except ImportError:
+    firestore = None
+
 from typing import Dict, Any, List, Optional
 import logging
 from datetime import datetime
@@ -18,12 +30,18 @@ class CloudantDatabase:
     """
     
     def __init__(self):
-        """Initialize Cloudant client"""
+        """Initialize database client"""
+        self.db_provider = settings.DB_PROVIDER.lower()
         self.client = None
-        self.db_name = settings.CLOUDANT_DB_NAME
-        self._initialize_client()
+        self.firestore_client = None
+        self.db_name = settings.CLOUDANT_DB_NAME if self.db_provider == "ibm" else "contract-intelligence"
+        
+        if self.db_provider == "ibm":
+            self._initialize_ibm_client()
+        elif self.db_provider == "gcp":
+            self._initialize_gcp_client()
     
-    def _initialize_client(self):
+    def _initialize_ibm_client(self):
         """Initialize Cloudant client with IAM authentication"""
         try:
             authenticator = IAMAuthenticator(settings.CLOUDANT_API_KEY)
@@ -32,6 +50,18 @@ class CloudantDatabase:
             logger.info(f"Cloudant client initialized for database: {self.db_name}")
         except Exception as e:
             logger.error(f"Failed to initialize Cloudant client: {str(e)}")
+            raise
+            
+    def _initialize_gcp_client(self):
+        """Initialize Firestore client"""
+        try:
+            self.firestore_client = firestore.AsyncClient(
+                project=settings.GCP_PROJECT_ID,
+                database=settings.FIRESTORE_DB_NAME
+            )
+            logger.info(f"Firestore client initialized for collection: {self.db_name}")
+        except Exception as e:
+            logger.error(f"Failed to initialize Firestore client: {str(e)}")
             raise
     
     async def create_database(self, db_name: str = None) -> bool:
@@ -45,6 +75,12 @@ class CloudantDatabase:
             True if created or already exists
         """
         db_name = db_name or self.db_name
+        
+        if self.db_provider == "gcp":
+            # Firestore collections are created implicitly
+            logger.info(f"Firestore collection ready: {db_name}")
+            return True
+            
         try:
             response = self.client.put_database(db=db_name).get_result()
             logger.info(f"Database created: {db_name}")
@@ -75,6 +111,18 @@ class CloudantDatabase:
             if 'updated_at' not in document:
                 document['updated_at'] = datetime.utcnow().isoformat()
             
+            if self.db_provider == "gcp":
+                doc_ref = self.firestore_client.collection(db_name).document(document.get('_id'))
+                if '_id' in document:
+                    document.pop('_id')
+                if '_rev' in document:
+                    document.pop('_rev')
+                await doc_ref.set(document)
+                document['_id'] = doc_ref.id
+                document['_rev'] = "1" # Firestore doesn't use revs
+                logger.info(f"Document created in Firestore: {doc_ref.id}")
+                return document
+            
             response = self.client.post_document(
                 db=db_name,
                 document=Document(**document)
@@ -102,6 +150,17 @@ class CloudantDatabase:
         """
         db_name = db_name or self.db_name
         try:
+            if self.db_provider == "gcp":
+                doc_ref = self.firestore_client.collection(db_name).document(doc_id)
+                doc = await doc_ref.get()
+                if doc.exists:
+                    data = doc.to_dict()
+                    data['_id'] = doc.id
+                    data['_rev'] = "1"
+                    return data
+                logger.info(f"Document not found in Firestore: {doc_id}")
+                return None
+                
             response = self.client.get_document(
                 db=db_name,
                 doc_id=doc_id
@@ -132,6 +191,19 @@ class CloudantDatabase:
             # Update timestamp
             document['updated_at'] = datetime.utcnow().isoformat()
             
+            if self.db_provider == "gcp":
+                doc_ref = self.firestore_client.collection(db_name).document(doc_id)
+                update_data = document.copy()
+                if '_id' in update_data:
+                    update_data.pop('_id')
+                if '_rev' in update_data:
+                    update_data.pop('_rev')
+                await doc_ref.set(update_data, merge=True)
+                document['_id'] = doc_id
+                document['_rev'] = "1"
+                logger.info(f"Document updated in Firestore: {doc_id}")
+                return document
+                
             response = self.client.put_document(
                 db=db_name,
                 doc_id=doc_id,
@@ -159,6 +231,12 @@ class CloudantDatabase:
         """
         db_name = db_name or self.db_name
         try:
+            if self.db_provider == "gcp":
+                doc_ref = self.firestore_client.collection(db_name).document(doc_id)
+                await doc_ref.delete()
+                logger.info(f"Document deleted from Firestore: {doc_id}")
+                return True
+                
             self.client.delete_document(
                 db=db_name,
                 doc_id=doc_id,
@@ -186,6 +264,25 @@ class CloudantDatabase:
         """
         db_name = db_name or self.db_name
         try:
+            if self.db_provider == "gcp":
+                collection_ref = self.firestore_client.collection(db_name)
+                query = collection_ref
+                for key, value in selector.items():
+                    # Simple equality translation
+                    if isinstance(value, dict) and "$in" in value:
+                        query = query.where(key, "in", value["$in"])
+                    else:
+                        query = query.where(key, "==", value)
+                
+                query = query.limit(limit).offset(skip)
+                docs = []
+                async for doc in query.stream():
+                    data = doc.to_dict()
+                    data['_id'] = doc.id
+                    data['_rev'] = "1"
+                    docs.append(data)
+                return docs
+                
             response = self.client.post_find(
                 db=db_name,
                 selector=selector,
@@ -212,6 +309,11 @@ class CloudantDatabase:
             True if index created successfully
         """
         db_name = db_name or self.db_name
+        
+        if self.db_provider == "gcp":
+            logger.info("Firestore handles single-field indexes automatically. Composite index might need manual setup via GCP console.")
+            return True
+            
         try:
             # Prepare index definition
             index_spec = {
@@ -253,6 +355,28 @@ class CloudantDatabase:
                 if 'updated_at' not in doc:
                     doc['updated_at'] = timestamp
             
+            if self.db_provider == "gcp":
+                batch = self.firestore_client.batch()
+                collection_ref = self.firestore_client.collection(db_name)
+                
+                for doc in documents:
+                    doc_copy = doc.copy()
+                    doc_id = doc_copy.pop('_id', None)
+                    doc_copy.pop('_rev', None)
+                    
+                    if doc_id:
+                        doc_ref = collection_ref.document(doc_id)
+                    else:
+                        doc_ref = collection_ref.document()
+                        
+                    batch.set(doc_ref, doc_copy)
+                    doc['_id'] = doc_ref.id
+                    doc['_rev'] = "1"
+                    
+                await batch.commit()
+                logger.info(f"Bulk created {len(documents)} documents in Firestore")
+                return documents
+                
             bulk_docs = [Document(**doc) for doc in documents]
             response = self.client.post_bulk_docs(
                 db=db_name,
@@ -286,6 +410,19 @@ class CloudantDatabase:
         """
         db_name = db_name or self.db_name
         try:
+            if self.db_provider == "gcp":
+                collection_ref = self.firestore_client.collection(db_name)
+                docs = []
+                async for doc in collection_ref.limit(limit).stream():
+                    if include_docs:
+                        data = doc.to_dict()
+                        data['_id'] = doc.id
+                        data['_rev'] = "1"
+                        docs.append(data)
+                    else:
+                        docs.append({"id": doc.id, "key": doc.id, "value": {"rev": "1"}})
+                return docs
+                
             response = self.client.post_all_docs(
                 db=db_name,
                 include_docs=include_docs,

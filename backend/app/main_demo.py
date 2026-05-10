@@ -3,6 +3,12 @@ SOW Sentinel - Demo Mode
 AI-powered Statement of Work compliance and risk management
 This version runs without IBM Cloud credentials for testing
 """
+import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file so that Google Auth picks up GOOGLE_APPLICATION_CREDENTIALS
+load_dotenv()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime

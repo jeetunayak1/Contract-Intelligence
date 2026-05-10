@@ -1,41 +1,81 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { ThemeProvider, createTheme, CssBaseline, Box, AppBar, Toolbar, Typography, Drawer, List, ListItem, ListItemIcon, ListItemText, ListItemButton } from '@mui/material';
 import { Dashboard as DashboardIcon, Description, Assessment, Warning, Notifications, Analytics as AnalyticsIcon, Security as SecurityIcon, Settings as SettingsIcon } from '@mui/icons-material';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-// Pages
 import Dashboard from './pages/Dashboard';
-import RiskReport from './pages/RiskReport';
-import IntegrationConfig from './pages/IntegrationConfig';
-import Settings from './pages/Settings';
-import SOWManagement from './pages/SOWManagement';
+import TransformationHub from './pages/TransformationHub';
 
 const theme = createTheme({
   palette: {
-    mode: 'light',
+    mode: 'dark',
     primary: {
-      main: '#1976d2',
+      main: '#00e676',
+      light: '#33eb91',
+      dark: '#00a152',
     },
     secondary: {
-      main: '#dc004e',
+      main: '#f48fb1',
+      light: '#f6a5c1',
+      dark: '#aa647b',
     },
+    background: {
+      default: '#0a0a0c',
+      paper: '#151518'
+    },
+    text: {
+      primary: '#ffffff',
+      secondary: 'rgba(255, 255, 255, 0.7)',
+    }
   },
+  typography: {
+    fontFamily: '"Inter", "Outfit", sans-serif',
+    h1: { fontFamily: 'Outfit' },
+    h2: { fontFamily: 'Outfit' },
+    h3: { fontFamily: 'Outfit' },
+    h4: { fontFamily: 'Outfit', fontWeight: 600 },
+    h5: { fontFamily: 'Outfit', fontWeight: 600 },
+    h6: { fontFamily: 'Outfit', fontWeight: 600 },
+  },
+  components: {
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          backgroundImage: 'none',
+          borderRadius: 16,
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          backgroundColor: '#151518',
+        }
+      }
+    },
+    MuiAppBar: {
+      styleOverrides: {
+        root: {
+          backgroundColor: 'rgba(10, 10, 12, 0.8)',
+          backdropFilter: 'blur(12px)',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+          boxShadow: 'none',
+        }
+      }
+    },
+    MuiDrawer: {
+      styleOverrides: {
+        paper: {
+          backgroundColor: '#0a0a0c',
+          borderRight: '1px solid rgba(255, 255, 255, 0.08)',
+        }
+      }
+    }
+  }
 });
 
 const drawerWidth = 240;
 
 const menuItems = [
-  { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
-  { text: 'Risk Report', icon: <SecurityIcon />, path: '/risk-report' },
-  { text: 'Integration Setup', icon: <SettingsIcon />, path: '/integrations' },
-  { text: 'API Settings', icon: <SettingsIcon />, path: '/settings' },
-  { text: 'SOW Management', icon: <Description />, path: '/sows' },
-  { text: 'Compliance', icon: <Assessment />, path: '/compliance' },
-  { text: 'Scope Creep', icon: <Warning />, path: '/scope-creep' },
-  { text: 'Alerts', icon: <Notifications />, path: '/alerts' },
-  { text: 'Analytics', icon: <AnalyticsIcon />, path: '/analytics' },
+  { text: 'Command Center', icon: <DashboardIcon />, path: '/' },
+  { text: 'Transformation Hub', icon: <Description />, path: '/sows' },
 ];
 
 function App() {
@@ -46,14 +86,19 @@ function App() {
         <Box sx={{ display: 'flex' }}>
           {/* App Bar */}
           <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
-            <Toolbar>
-              <SecurityIcon sx={{ mr: 2 }} />
-              <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 'bold' }}>
-                SOW Sentinel
-              </Typography>
-              <Typography variant="caption" sx={{ ml: 2, color: 'rgba(255,255,255,0.7)' }}>
-                Preventing Revenue Leakage
-              </Typography>
+            <Toolbar sx={{ justifyContent: 'space-between' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <SecurityIcon sx={{ mr: 2, color: 'primary.main', fontSize: 32 }} />
+                <Typography variant="h5" noWrap component="div" sx={{ fontWeight: 800, letterSpacing: -1 }}>
+                  SOW <span style={{ color: '#00e676' }}>SENTINEL</span>
+                </Typography>
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: 600 }}>
+                  Agentic Governance Active
+                </Typography>
+                <Box className="agent-pulse" sx={{ width: 8, height: 8, bgcolor: 'primary.main' }} />
+              </Box>
             </Toolbar>
           </AppBar>
 
@@ -74,7 +119,7 @@ function App() {
               <List>
                 {menuItems.map((item) => (
                   <ListItem key={item.text} disablePadding>
-                    <ListItemButton component="a" href={item.path}>
+                    <ListItemButton component={Link} to={item.path}>
                       <ListItemIcon>{item.icon}</ListItemIcon>
                       <ListItemText primary={item.text} />
                     </ListItemButton>
@@ -89,14 +134,7 @@ function App() {
             <Toolbar />
             <Routes>
               <Route path="/" element={<Dashboard />} />
-              <Route path="/risk-report" element={<RiskReport sowId="SOW-2024-ACME-001" />} />
-              <Route path="/integrations" element={<IntegrationConfig />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="/sows" element={<SOWManagement />} />
-              <Route path="/compliance" element={<div>Compliance - Coming Soon</div>} />
-              <Route path="/scope-creep" element={<div>Scope Creep Detection - Coming Soon</div>} />
-              <Route path="/alerts" element={<div>Alerts - Coming Soon</div>} />
-              <Route path="/analytics" element={<div>Analytics - Coming Soon</div>} />
+              <Route path="/sows" element={<TransformationHub />} />
             </Routes>
           </Box>
         </Box>

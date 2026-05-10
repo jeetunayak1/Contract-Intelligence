@@ -62,7 +62,7 @@ else
     fi
     
     echo "🚀 Starting frontend..."
-    npm start &
+    npm run dev &
     FRONTEND_PID=$!
     cd ..
     

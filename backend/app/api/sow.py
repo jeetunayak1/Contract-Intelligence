@@ -11,6 +11,7 @@ import requests
 from ..agents.ingestion_agent import IngestionAgent
 from ..agents.monitoring_agent import MonitoringAgent
 from ..agents.executive_agent import ExecutiveAgent
+from ..agents.provisioning_agent import provisioning_agent
 from ..core.cloudant_db import cloudant_db
 from ..core.config import settings
 from ..models.sow_models import (
@@ -601,6 +602,7 @@ async def list_sows(
                 "total_penalty_exposure": financial_summary.get("total_penalties_at_risk", 0),
                 "alerts_count": len(doc.get("alerts", [])),
                 "action_items_count": len(doc.get("action_items", [])),
+                "active_agent": doc.get("active_agent", "Ingestion Agent"),
                 "created_at": doc.get("created_at"),
                 "updated_at": doc.get("updated_at"),
             })
@@ -930,23 +932,41 @@ async def execute_sow_actions(
             "title": "Approved staged action items executed into downstream systems",
             "timestamp": execution_timestamp,
         })
+        # Add provisioning for milestones/deliverables
+        provisioning_results = {}
+        if requested_stage == "post_approval" or not requested_stage:
+            try:
+                provisioning_results = await provisioning_agent.provision_approved_sow(sow_id)
+                logger.info(f"Provisioning Agent ran for {sow_id}: {provisioning_results}")
+            except Exception as e:
+                logger.error(f"Provisioning Agent failed for {sow_id}: {e}")
+
+        # Update integration execution state
+        for stage, data in stage_results.items():
+            for target, config in data.items():
+                if config.get("issues_created") or config.get("meetings_created") or config.get("channels_created"):
+                    config["executed"] = True
+
+        doc["integration_execution"] = stage_results
         doc["updated_at"] = execution_timestamp
 
         saved_doc = await _save_sow_document(doc)
 
         return {
             "success": True,
-            "message": f"Approved items executed for SOW {sow_id}",
-            "issues_created": created_issues,
-            "meetings_created": created_meetings,
-            "teams_channels_created": created_teams_channels,
+            "message": f"Action items executed and milestones provisioned for {sow_id}",
+            "execution_summary": {
+                "github_issues_created": len(created_issues),
+                "calendar_meetings_created": len(created_meetings),
+                "teams_channels_created": len(created_teams_channels),
+                "provisioning_agent": provisioning_results
+            },
             "sow": _sanitize_for_response(saved_doc)
         }
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to execute approved items: {str(e)}")
-
 
 @router.get("/{sow_id}/timeline")
 async def get_sow_timeline(sow_id: str):
