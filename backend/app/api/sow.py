@@ -6,6 +6,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 import os
 import tempfile
+import uuid
 import requests
 
 from ..agents.ingestion_agent import IngestionAgent
@@ -553,6 +554,7 @@ async def upload_sow(
     temp_file_path: Optional[str] = None
 
     try:
+        upload_id = str(uuid.uuid4())[:8]
         file_bytes = await file.read()
         suffix = os.path.splitext(file.filename or "sow-upload.txt")[1] or ".txt"
 
@@ -564,7 +566,8 @@ async def upload_sow(
             file_path=temp_file_path,
             sow_number=sow_number,
             client_name=client_name,
-            project_name=project_name
+            project_name=project_name,
+            upload_id=upload_id
         )
 
         risk_assessment = await ingestion_agent.quick_risk_assessment(sow_doc)

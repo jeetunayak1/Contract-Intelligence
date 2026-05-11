@@ -123,7 +123,8 @@ class IngestionAgent:
         file_path: str,
         sow_number: str,
         client_name: str,
-        project_name: str
+        project_name: str,
+        upload_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Parse a SOW document and extract all relevant information
@@ -180,6 +181,7 @@ class IngestionAgent:
             sow_number=sow_number,
             client_name=client_name,
             project_name=project_name,
+            upload_id=upload_id,
             start_date=extraction_source.get("start_date", datetime.utcnow().isoformat()),
             end_date=extraction_source.get("end_date", datetime.utcnow().isoformat()),
             total_value=extraction_source.get("total_value", 0),
