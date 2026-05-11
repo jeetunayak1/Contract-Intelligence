@@ -25,7 +25,7 @@ app = FastAPI(
 )
 
 # Include routers
-app.include_router(sow_router)
+app.include_router(sow_router, prefix="/api/v1/sow")
 app.include_router(integrations_router)
 app.include_router(settings_router)
 

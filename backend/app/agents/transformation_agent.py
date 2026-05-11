@@ -17,12 +17,7 @@ class TransformationAgent:
         if self.llm_provider == "gcp":
             try:
                 from google import genai
-                from google.genai import types
-                self.gemini_client = genai.Client(
-                    vertexai=True,
-                    project=settings.GCP_PROJECT_ID,
-                    location=settings.GCP_LOCATION
-                )
+                self.gemini_client = genai.Client(api_key=settings.GOOGLE_API_KEY)
             except ImportError:
                 self.gemini_client = None
         else:
@@ -65,6 +60,7 @@ SOW TEXT TO ANALYZE:
             try:
                 from google.genai import types
                 import asyncio
+                model_id = settings.GEMINI_MODEL_ID
                 response = await asyncio.wait_for(
                     asyncio.to_thread(
                         self.gemini_client.models.generate_content,
@@ -80,8 +76,6 @@ SOW TEXT TO ANALYZE:
                 return self._extract_json(response.text)
             except Exception as e:
                 logger.error(f"Error in transformation agent (Real AI failed): {e}")
-                if "PERMISSION_DENIED" in str(e):
-                    logger.error("TIP: Enable 'Vertex AI API' in GCP console or check project permissions.")
                 
         # Heuristic fallback if LLM fails
         project_name = sow_doc.get("project_name", "the project")
