@@ -1045,6 +1045,46 @@ async def get_sow_timeline(sow_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch SOW timeline: {str(e)}")
 
+@router.delete("/{sow_id}")
+async def delete_sow(sow_id: str):
+    """
+    Delete an SOW document from the database.
+    
+    Args:
+        sow_id: The ID of the SOW document to delete
+        
+    Returns:
+        Success message with deleted SOW ID
+    """
+    try:
+        # First, get the document to retrieve its revision
+        doc = await cloudant_db.get_document(sow_id)
+        if not doc:
+            raise HTTPException(status_code=404, detail=f"SOW not found: {sow_id}")
+        
+        # Get the revision for deletion
+        rev = doc.get("_rev")
+        if not rev:
+            raise HTTPException(status_code=400, detail="Document revision not found")
+        
+        # Delete the document
+        success = await cloudant_db.delete_document(sow_id, rev)
+        
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to delete SOW document")
+        
+        return {
+            "success": True,
+            "message": f"SOW document deleted successfully",
+            "sow_id": sow_id,
+            "deleted_at": datetime.utcnow().isoformat()
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete SOW: {str(e)}")
+
+
 
 # ============================================================================
 # RISK & COMPLIANCE ENDPOINTS

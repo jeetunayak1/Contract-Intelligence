@@ -21,6 +21,12 @@ import {
   Typography,
   Avatar,
   LinearProgress,
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
 } from '@mui/material';
 import {
   Warning,
@@ -40,6 +46,7 @@ import {
   AttachMoney,
   Gavel,
   TipsAndUpdates,
+  Delete,
 } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 
@@ -89,35 +96,35 @@ interface ActionItemNumericRisk {
 }
 
 interface ActionItem {
-    id: string;
-    title: string;
-    description: string;
-    priority?: string;
-    approval_state?: string;
-    execution_state?: string;
-    recommended_owner?: string;
-    recommended_actions?: string[];
-    action_type?: string;
-    execution_targets?: string[];
-    workflow_stage?: 'pre_acceptance' | 'post_approval' | string;
-    cta_label?: string;
+  id: string;
+  title: string;
+  description: string;
+  priority?: string;
+  approval_state?: string;
+  execution_state?: string;
+  recommended_owner?: string;
+  recommended_actions?: string[];
+  action_type?: string;
+  execution_targets?: string[];
+  workflow_stage?: 'pre_acceptance' | 'post_approval' | string;
+  cta_label?: string;
+  sla_reference?: string;
+  numeric_risk?: ActionItemNumericRisk;
+  github_issue?: {
+    issue_url?: string;
+    title?: string;
+    repository?: string;
+    workflow_stage?: string;
     sla_reference?: string;
-    numeric_risk?: ActionItemNumericRisk;
-    github_issue?: {
-      issue_url?: string;
-      title?: string;
-      repository?: string;
-      workflow_stage?: string;
-      sla_reference?: string;
-    };
-    calendar_event?: {
-      title?: string;
-      provider?: string;
-      start_time?: string;
-      calendar_name?: string;
-      workflow_stage?: string;
-      sla_reference?: string;
-    };
+  };
+  calendar_event?: {
+    title?: string;
+    provider?: string;
+    start_time?: string;
+    calendar_name?: string;
+    workflow_stage?: string;
+    sla_reference?: string;
+  };
 }
 
 interface TimelineEvent {
@@ -266,6 +273,9 @@ const TransformationHub: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [approving, setApproving] = useState(false);
   const [executing, setExecuting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [sowToDelete, setSowToDelete] = useState<string | null>(null);
 
   const [uploadForm, setUploadForm] = useState({
     sowNumber: '',
@@ -390,7 +400,7 @@ const TransformationHub: React.FC = () => {
     setUploading(true);
     setUploadProgress(10);
     setUploadStep('Agent Recon: Parsing document structure...');
-    
+
     try {
       // Simulate steps for better UX since it's a single request
       const simulateSteps = async () => {
@@ -411,7 +421,7 @@ const TransformationHub: React.FC = () => {
       });
 
       void simulateSteps();
-      
+
       const response = await uploadPromise;
 
       if (!response.ok) {
@@ -454,8 +464,8 @@ const TransformationHub: React.FC = () => {
 
     const approvedAlertIds = decision === 'approved'
       ? selectedSowAlerts
-          .map((alert) => alert._id || alert.id)
-          .filter((value): value is string => Boolean(value))
+        .map((alert) => alert._id || alert.id)
+        .filter((value): value is string => Boolean(value))
       : [];
 
     const approvedActionIds = decision === 'approved'
@@ -538,6 +548,49 @@ const TransformationHub: React.FC = () => {
     }
   };
 
+  const handleDeleteSow = async (sowId: string) => {
+    setDeleting(true);
+    try {
+      const response = await fetch(`${API_BASE}/${sowId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({}));
+        throw new Error(errorBody.detail || 'Delete failed');
+      }
+
+      toast.success('SOW document deleted successfully');
+
+      // Reload the list and clear selection if deleted SOW was selected
+      await loadSows();
+      await loadDashboardSummary();
+
+      if (selectedSowId === sowId) {
+        setSelectedSowId('');
+        setSelectedSow(null);
+      }
+
+      setDeleteDialogOpen(false);
+      setSowToDelete(null);
+    } catch (error) {
+      console.error(error);
+      toast.error(error instanceof Error ? error.message : 'Delete failed');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const openDeleteDialog = (sowId: string) => {
+    setSowToDelete(sowId);
+    setDeleteDialogOpen(true);
+  };
+
+  const closeDeleteDialog = () => {
+    setDeleteDialogOpen(false);
+    setSowToDelete(null);
+  };
+
   const renderRiskChip = (level?: string) => {
     const l = (level || 'medium').toLowerCase();
     return (
@@ -549,19 +602,18 @@ const TransformationHub: React.FC = () => {
           fontSize: '0.65rem',
           height: 20,
           borderRadius: 1,
-          bgcolor: 
-            l === 'critical' ? 'rgba(255, 23, 68, 0.15)' : 
-            l === 'high' ? 'rgba(255, 152, 0, 0.15)' : 
-            'rgba(0, 230, 118, 0.15)',
-          color: 
-            l === 'critical' ? '#ff1744' : 
-            l === 'high' ? '#ff9800' : 
-            '#00e676',
-          border: `1px solid ${
-            l === 'critical' ? 'rgba(255, 23, 68, 0.3)' : 
-            l === 'high' ? 'rgba(255, 152, 0, 0.3)' : 
-            'rgba(0, 230, 118, 0.3)'
-          }`,
+          bgcolor:
+            l === 'critical' ? 'rgba(255, 23, 68, 0.15)' :
+              l === 'high' ? 'rgba(255, 152, 0, 0.15)' :
+                'rgba(0, 230, 118, 0.15)',
+          color:
+            l === 'critical' ? '#ff1744' :
+              l === 'high' ? '#ff9800' :
+                '#00e676',
+          border: `1px solid ${l === 'critical' ? 'rgba(255, 23, 68, 0.3)' :
+            l === 'high' ? 'rgba(255, 152, 0, 0.3)' :
+              'rgba(0, 230, 118, 0.3)'
+            }`,
         }}
       />
     );
@@ -578,15 +630,15 @@ const TransformationHub: React.FC = () => {
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4, position: 'relative' }}>
       {/* Agentic Processing Overlay */}
       {uploading && (
-        <Box 
-          sx={{ 
-            position: 'fixed', 
-            top: 0, left: 0, right: 0, bottom: 0, 
-            bgcolor: 'rgba(10, 10, 12, 0.9)', 
-            zIndex: 9999, 
-            display: 'flex', 
-            flexDirection: 'column', 
-            alignItems: 'center', 
+        <Box
+          sx={{
+            position: 'fixed',
+            top: 0, left: 0, right: 0, bottom: 0,
+            bgcolor: 'rgba(10, 10, 12, 0.9)',
+            zIndex: 9999,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
             justifyContent: 'center',
             backdropFilter: 'blur(10px)'
           }}
@@ -597,7 +649,7 @@ const TransformationHub: React.FC = () => {
             </Box>
             <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>Agentic <span className="gradient-text">Transformation</span></Typography>
             <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>The AI swarm is operationalizing your SOW...</Typography>
-            
+
             <Box sx={{ mb: 4 }}>
               <LinearProgress variant="determinate" value={uploadProgress} sx={{ height: 10, borderRadius: 5, bgcolor: 'rgba(255,255,255,0.05)' }} />
               <Typography variant="caption" sx={{ mt: 2, display: 'block', fontWeight: 700, color: 'primary.main', textTransform: 'uppercase', letterSpacing: 1 }}>
@@ -671,10 +723,10 @@ const TransformationHub: React.FC = () => {
         <Grid item xs={12} md={4}>
           <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="h6" sx={{ fontWeight: 800 }}>Active Transformations</Typography>
-            <Button 
-              variant="contained" 
-              size="small" 
-              startIcon={<CloudUpload />} 
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<CloudUpload />}
               onClick={() => {
                 const input = document.createElement('input');
                 input.type = 'file';
@@ -693,24 +745,46 @@ const TransformationHub: React.FC = () => {
           </Box>
           <Stack spacing={2}>
             {sows.map((sow) => (
-              <Box 
-                key={sow._id} 
-                onClick={() => setSelectedSowId(sow._id)}
-                sx={{ 
-                  p: 3, 
-                  borderRadius: 4, 
-                  cursor: 'pointer',
-                  bgcolor: selectedSowId === sow._id ? 'rgba(0, 230, 118, 0.05)' : 'rgba(255,255,255,0.02)', 
+              <Box
+                key={sow._id}
+                sx={{
+                  p: 3,
+                  borderRadius: 4,
+                  bgcolor: selectedSowId === sow._id ? 'rgba(0, 230, 118, 0.05)' : 'rgba(255,255,255,0.02)',
                   border: selectedSowId === sow._id ? '1px solid #00e676' : '1px solid rgba(255,255,255,0.05)',
                   transition: 'all 0.2s',
-                  '&:hover': { bgcolor: 'rgba(255,255,255,0.05)' }
+                  '&:hover': { bgcolor: 'rgba(255,255,255,0.05)' },
+                  position: 'relative'
                 }}
               >
-                <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>{sow.project_name}</Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>{sow.client_name}</Typography>
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                  <Chip size="small" label={sow.risk_assessment?.risk_level || 'low'} color={sow.risk_assessment?.risk_level === 'critical' ? 'error' : 'success'} sx={{ fontWeight: 900, textTransform: 'uppercase', fontSize: '0.6rem', height: 18 }} />
-                  <Chip size="small" label={sow.active_agent || 'Recon'} sx={{ fontWeight: 900, fontSize: '0.6rem', height: 18 }} />
+                <Box
+                  onClick={() => setSelectedSowId(sow._id)}
+                  sx={{ cursor: 'pointer' }}
+                >
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>{sow.project_name}</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>{sow.client_name}</Typography>
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                    <Chip size="small" label={sow.risk_assessment?.risk_level || 'low'} color={sow.risk_assessment?.risk_level === 'critical' ? 'error' : 'success'} sx={{ fontWeight: 900, textTransform: 'uppercase', fontSize: '0.6rem', height: 18 }} />
+                    <Chip size="small" label={sow.active_agent || 'Recon'} sx={{ fontWeight: 900, fontSize: '0.6rem', height: 18 }} />
+                    <IconButton
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openDeleteDialog(sow._id);
+                      }}
+                      sx={{
+                        ml: 'auto',
+                        color: '#00e676',
+                        opacity: 0.7,
+                        '&:hover': {
+                          bgcolor: 'rgba(0, 230, 118, 0.1)',
+                          opacity: 1,
+                        }
+                      }}
+                      size="small"
+                    >
+                      <Delete fontSize="small" />
+                    </IconButton>
+                  </Box>
                 </Box>
               </Box>
             ))}
@@ -773,7 +847,7 @@ const TransformationHub: React.FC = () => {
                           <Typography variant="caption" color="text.secondary">Revenue Leakage Optimization</Typography>
                         </Box>
                       </Box>
-                      
+
                       {selectedSow.transformation_plan ? (
                         <Grid container spacing={3}>
                           <Grid item xs={12} md={4}>
@@ -833,10 +907,10 @@ const TransformationHub: React.FC = () => {
                             <Typography variant="caption" color="text.secondary">Ready-to-Sign Contract Rewrite</Typography>
                           </Box>
                         </Box>
-                        <Button 
-                          variant="contained" 
-                          color="primary" 
-                          startIcon={<DoneAll />} 
+                        <Button
+                          variant="contained"
+                          color="primary"
+                          startIcon={<DoneAll />}
                           onClick={() => handleReviewDecision('approved')}
                           disabled={selectedSow.review_status === 'approved'}
                           sx={{ borderRadius: 2, fontWeight: 700 }}
@@ -890,7 +964,7 @@ const TransformationHub: React.FC = () => {
                                 </Typography>
                                 <Typography variant="body2" color="text.primary" sx={{ lineHeight: 1.6 }}>{item.description}</Typography>
                               </Box>
-                              
+
                               <Box sx={{ mb: 2 }}>
                                 <Typography variant="caption" sx={{ fontWeight: 800, color: 'text.secondary', textTransform: 'uppercase', letterSpacing: 1, display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
                                   Recommended Fix
@@ -922,22 +996,22 @@ const TransformationHub: React.FC = () => {
                               </Box>
 
                               <Stack spacing={1}>
-                                <Button 
-                                  variant="contained" 
-                                  fullWidth 
-                                  size="small" 
-                                  startIcon={<DoneAll />} 
+                                <Button
+                                  variant="contained"
+                                  fullWidth
+                                  size="small"
+                                  startIcon={<DoneAll />}
                                   onClick={() => handleExecuteActions([item.id])}
                                   disabled={executing}
                                   sx={{ borderRadius: 2, fontWeight: 700, textTransform: 'none' }}
                                 >
                                   Approve Transform
                                 </Button>
-                                <Button 
-                                  variant="outlined" 
-                                  fullWidth 
-                                  size="small" 
-                                  startIcon={<CalendarMonth />} 
+                                <Button
+                                  variant="outlined"
+                                  fullWidth
+                                  size="small"
+                                  startIcon={<CalendarMonth />}
                                   onClick={() => toast.info('Scheduling alignment meeting...')}
                                   sx={{ borderRadius: 2, fontWeight: 700, textTransform: 'none' }}
                                 >
@@ -956,6 +1030,50 @@ const TransformationHub: React.FC = () => {
           )}
         </Grid>
       </Grid>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={closeDeleteDialog}
+        PaperProps={{
+          sx: {
+            bgcolor: 'rgba(18, 18, 20, 0.95)',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: 3,
+          }
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>
+          Delete SOW Document?
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ color: 'text.secondary' }}>
+            Are you sure you want to delete this SOW document? This action cannot be undone.
+            All associated data including alerts, action items, and timeline events will be permanently removed.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ p: 3, pt: 0 }}>
+          <Button
+            onClick={closeDeleteDialog}
+            variant="outlined"
+            disabled={deleting}
+            sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 700 }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={() => sowToDelete && handleDeleteSow(sowToDelete)}
+            variant="contained"
+            color="error"
+            disabled={deleting}
+            startIcon={deleting ? <CircularProgress size={16} /> : <Delete />}
+            sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 700 }}
+          >
+            {deleting ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };

@@ -1,12 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import { ThemeProvider, createTheme, CssBaseline, Box, AppBar, Toolbar, Typography, Drawer, List, ListItem, ListItemIcon, ListItemText, ListItemButton } from '@mui/material';
-import { Dashboard as DashboardIcon, Description, Assessment, Warning, Notifications, Analytics as AnalyticsIcon, Security as SecurityIcon, Settings as SettingsIcon } from '@mui/icons-material';
+import { ThemeProvider, createTheme, CssBaseline, Box, AppBar, Toolbar, Typography, Drawer, List, ListItem, ListItemIcon, ListItemText, ListItemButton, IconButton } from '@mui/material';
+import { Dashboard as DashboardIcon, Description, Assessment, Warning, Notifications, Analytics as AnalyticsIcon, Security as SecurityIcon, Settings as SettingsIcon, Menu as MenuIcon, ChevronLeft, Visibility, GitHub as GitHubIcon } from '@mui/icons-material';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 import Dashboard from './pages/Dashboard';
 import TransformationHub from './pages/TransformationHub';
+import LiveMonitoring from './pages/LiveMonitoring';
+import GitHubConfiguration from './pages/GitHubConfiguration';
+import Settings from './pages/Settings';
+import AdminDemoData from './pages/AdminDemoData';
 
 const theme = createTheme({
   palette: {
@@ -76,9 +80,18 @@ const drawerWidth = 240;
 const menuItems = [
   { text: 'Command Center', icon: <DashboardIcon />, path: '/' },
   { text: 'Transformation Hub', icon: <Description />, path: '/sows' },
+  { text: 'Live Monitoring', icon: <Visibility />, path: '/monitoring' },
+  { text: 'GitHub Configuration', icon: <GitHubIcon />, path: '/github-config' },
+  { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
 ];
 
 function App() {
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  const toggleSidebar = () => {
+    setSidebarOpen(!sidebarOpen);
+  };
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -88,6 +101,15 @@ function App() {
           <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
             <Toolbar sx={{ justifyContent: 'space-between' }}>
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <IconButton
+                  color="inherit"
+                  aria-label="toggle sidebar"
+                  onClick={toggleSidebar}
+                  edge="start"
+                  sx={{ mr: 2 }}
+                >
+                  {sidebarOpen ? <ChevronLeft /> : <MenuIcon />}
+                </IconButton>
                 <SecurityIcon sx={{ mr: 2, color: 'primary.main', fontSize: 32 }} />
                 <Typography variant="h5" noWrap component="div" sx={{ fontWeight: 800, letterSpacing: -1 }}>
                   SOW <span style={{ color: '#00e676' }}>SENTINEL</span>
@@ -104,13 +126,15 @@ function App() {
 
           {/* Sidebar */}
           <Drawer
-            variant="permanent"
+            variant="persistent"
+            open={sidebarOpen}
             sx={{
               width: drawerWidth,
               flexShrink: 0,
               '& .MuiDrawer-paper': {
                 width: drawerWidth,
                 boxSizing: 'border-box',
+                transition: 'width 0.3s ease-in-out',
               },
             }}
           >
@@ -120,7 +144,7 @@ function App() {
                 {menuItems.map((item) => (
                   <ListItem key={item.text} disablePadding>
                     <ListItemButton component={Link} to={item.path}>
-                      <ListItemIcon>{item.icon}</ListItemIcon>
+                      <ListItemIcon sx={{ color: 'primary.main' }}>{item.icon}</ListItemIcon>
                       <ListItemText primary={item.text} />
                     </ListItemButton>
                   </ListItem>
@@ -130,11 +154,24 @@ function App() {
           </Drawer>
 
           {/* Main Content */}
-          <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
+          <Box
+            component="main"
+            sx={{
+              flexGrow: 1,
+              p: 3,
+              transition: 'margin 0.3s ease-in-out',
+              marginLeft: sidebarOpen ? 0 : `-${drawerWidth}px`,
+            }}
+          >
             <Toolbar />
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/sows" element={<TransformationHub />} />
+              <Route path="/monitoring" element={<LiveMonitoring />} />
+              <Route path="/github-config" element={<GitHubConfiguration />} />
+              <Route path="/settings" element={<Settings />} />
+              {/* Hidden admin route - not in menu */}
+              <Route path="/admin/demo-data" element={<AdminDemoData />} />
             </Routes>
           </Box>
         </Box>
