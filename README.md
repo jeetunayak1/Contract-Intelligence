@@ -165,8 +165,8 @@ Full architecture details: [ARCHITECTURE.md](ARCHITECTURE.md)
 ### Backend
 - FastAPI
 - Python 3.11+
-- IBM Cloudant
-- watsonx.ai configuration and integration hooks
+- Databases: IBM Cloudant or Google Cloud Firestore
+- AI/LLMs: IBM watsonx.ai or Google GenAI (Gemini)
 - Pydantic / pydantic-settings
 
 ### Frontend
@@ -227,6 +227,9 @@ npm run dev -- --host 0.0.0.0
 
 ### Full Pull-and-Run Guide
 See [docs/SETUP_FROM_GIT.md](docs/SETUP_FROM_GIT.md)
+
+### Cloud Provider Setup
+See [docs/GCP_AND_IBM_SETUP.md](docs/GCP_AND_IBM_SETUP.md) for instructions on switching between IBM and GCP.
 
 ---
 
@@ -316,6 +319,7 @@ DELETE /api/v1/integrations/{sow_id}
 - [.ai/codebase-summary.md](.ai/codebase-summary.md)
 - [docs/INTEGRATION_CONFIGURATION.md](docs/INTEGRATION_CONFIGURATION.md)
 - [docs/SETUP_FROM_GIT.md](docs/SETUP_FROM_GIT.md)
+- [docs/GCP_AND_IBM_SETUP.md](docs/GCP_AND_IBM_SETUP.md)
 
 ---
 

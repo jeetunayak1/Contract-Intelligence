@@ -86,3 +86,4 @@ bob-report.md
 # SSH Keys
 id_personal
 id_personal.pub
+backend/gcp-key.json

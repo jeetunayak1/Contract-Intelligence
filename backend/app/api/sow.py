@@ -6,11 +6,13 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 import os
 import tempfile
+import uuid
 import requests
 
 from ..agents.ingestion_agent import IngestionAgent
 from ..agents.monitoring_agent import MonitoringAgent
 from ..agents.executive_agent import ExecutiveAgent
+from ..agents.provisioning_agent import provisioning_agent
 from ..core.cloudant_db import cloudant_db
 from ..core.config import settings
 from ..models.sow_models import (
@@ -24,7 +26,7 @@ from ..models.sow_models import (
     AlertSeverity
 )
 
-router = APIRouter(prefix="/api/v1/sow", tags=["SOW Management"])
+router = APIRouter(tags=["SOW Management"])
 
 # Initialize agents
 ingestion_agent = IngestionAgent(
@@ -198,84 +200,136 @@ def _build_action_items(
         obligation_label = obligation.get("description", "SOW obligation")
         sla_reference = f"{obligation_label} due {obligation.get('deadline')}" if obligation.get("deadline") else obligation_label
 
-        action_items.append(_base_action(
-            action_id=f"ACTION-{obligation['id']}-PRECHECK",
-            source_type="obligation",
-            source_id=obligation["id"],
-            title=f"Validate SLA before accepting: {obligation_label}",
-            description=(
-                f"Review whether the delivery team can commit to '{obligation_label}' before accepting the SOW. "
-                f"Confirm feasibility, dependencies, and exposure tied to the stated SLA."
-            ),
-            priority=risk_level,
-            recommended_owner="project_manager",
-            stage="pre_acceptance",
-            action_type="create_github_issue",
-            execution_targets=["github", "calendar"],
-            cta_label="Open pre-acceptance GitHub review item",
-            sla_reference=sla_reference,
-            numeric_risk={
-                "penalty_amount": penalty_amount,
-                "penalty_amount_display": _format_currency(penalty_amount),
-                "days_remaining": deadline_metrics["days_remaining"],
-                "hours_remaining": deadline_metrics["hours_remaining"],
-            },
-            recommended_actions=[
-                "Validate delivery feasibility against current capacity",
-                "Confirm assumptions, dependencies, and client responsibilities",
-                "Flag any SLA terms that need negotiation before signature",
-            ],
-        ))
+        requires_precheck = (
+            risk_level in {"medium", "high", "critical"}
+            or penalty_amount > 0
+            or deadline_metrics["hours_remaining"] is not None
+        )
+        requires_delivery_tracking = (
+            risk_level in {"high", "critical"}
+            or penalty_amount >= 1000
+            or (deadline_metrics["days_remaining"] is not None and deadline_metrics["days_remaining"] <= 45)
+        )
+        requires_exec_escalation = (
+            risk_level == "critical"
+            or penalty_amount >= 5000
+            or (deadline_metrics["days_remaining"] is not None and deadline_metrics["days_remaining"] <= 14)
+        )
 
-        action_items.append(_base_action(
-            action_id=f"ACTION-{obligation['id']}-DELIVERY",
-            source_type="obligation",
-            source_id=obligation["id"],
-            title=f"Track approved SLA delivery for {obligation_label}",
-            description=(
-                f"After SOW approval, create a delivery execution item with explicit SLA tracking for "
-                f"'{obligation_label}' and monitor progress against the committed deadline."
-            ),
-            priority=risk_level,
-            recommended_owner="delivery_manager",
-            stage="post_approval",
-            action_type="create_github_issue",
-            execution_targets=["github"],
-            cta_label="Create delivery GitHub item",
-            sla_reference=sla_reference,
-            numeric_risk={
-                "penalty_amount": penalty_amount,
-                "penalty_amount_display": _format_currency(penalty_amount),
-                "days_remaining": deadline_metrics["days_remaining"],
-                "hours_remaining": deadline_metrics["hours_remaining"],
-            },
-            recommended_actions=[
-                "Create implementation task in delivery repo",
-                "Apply SLA and penalty-risk labels",
-                "Track blockers weekly until completion",
-            ],
-        ))
+        if requires_precheck:
+            action_items.append(_base_action(
+                action_id=f"ACTION-{obligation['id']}-PRECHECK",
+                source_type="obligation",
+                source_id=obligation["id"],
+                title=f"Validate SLA before accepting: {obligation_label}",
+                description=(
+                    f"Review whether the delivery team can commit to '{obligation_label}' before accepting the SOW. "
+                    f"Confirm feasibility, dependencies, and exposure tied to the stated SLA."
+                ),
+                priority=risk_level,
+                recommended_owner="project_manager",
+                stage="pre_acceptance",
+                action_type="create_github_issue",
+                execution_targets=["github", "calendar"],
+                cta_label="Open pre-acceptance GitHub review item",
+                sla_reference=sla_reference,
+                numeric_risk={
+                    "penalty_amount": penalty_amount,
+                    "penalty_amount_display": _format_currency(penalty_amount),
+                    "days_remaining": deadline_metrics["days_remaining"],
+                    "hours_remaining": deadline_metrics["hours_remaining"],
+                },
+                recommended_actions=[
+                    "Validate delivery feasibility against current capacity",
+                    "Confirm assumptions, dependencies, and client responsibilities",
+                    "Flag any SLA terms that need negotiation before signature",
+                ],
+            ))
+
+        if requires_delivery_tracking:
+            action_items.append(_base_action(
+                action_id=f"ACTION-{obligation['id']}-DELIVERY",
+                source_type="obligation",
+                source_id=obligation["id"],
+                title=f"Track approved SLA delivery for {obligation_label}",
+                description=(
+                    f"After SOW approval, create a delivery execution item with explicit SLA tracking for "
+                    f"'{obligation_label}' and monitor progress against the committed deadline."
+                ),
+                priority=risk_level,
+                recommended_owner="delivery_manager",
+                stage="post_approval",
+                action_type="create_github_issue",
+                execution_targets=["github"],
+                cta_label="Create delivery GitHub item",
+                sla_reference=sla_reference,
+                numeric_risk={
+                    "penalty_amount": penalty_amount,
+                    "penalty_amount_display": _format_currency(penalty_amount),
+                    "days_remaining": deadline_metrics["days_remaining"],
+                    "hours_remaining": deadline_metrics["hours_remaining"],
+                },
+                recommended_actions=[
+                    "Create implementation task in delivery repo",
+                    "Apply SLA and penalty-risk labels",
+                    "Track blockers weekly until completion",
+                ],
+            ))
+
+        if requires_exec_escalation:
+            action_items.append(_base_action(
+                action_id=f"ACTION-{obligation['id']}-ESCALATE",
+                source_type="obligation",
+                source_id=obligation["id"],
+                title=f"Escalate critical obligation exposure: {obligation_label}",
+                description=(
+                    f"Critical timing or penalty exposure detected for '{obligation_label}'. "
+                    f"Trigger executive attention and mitigation planning immediately."
+                ),
+                priority="critical" if risk_level == "critical" else risk_level,
+                recommended_owner="executive_team",
+                stage="pre_acceptance",
+                action_type="schedule_calendar_review",
+                execution_targets=["calendar"],
+                cta_label="Escalate critical obligation",
+                sla_reference=sla_reference,
+                numeric_risk={
+                    "penalty_amount": penalty_amount,
+                    "penalty_amount_display": _format_currency(penalty_amount),
+                    "days_remaining": deadline_metrics["days_remaining"],
+                    "hours_remaining": deadline_metrics["hours_remaining"],
+                },
+                recommended_actions=[
+                    "Review whether the current commitment is commercially acceptable",
+                    "Decide mitigation, negotiation, or de-scoping options",
+                    "Assign named owners for every blocking dependency",
+                ],
+            ))
 
     for clause in sow_doc.get("vague_clauses", []):
-        clause_preview = clause['clause_text'][:60]
-        action_items.append(_base_action(
-            action_id=f"ACTION-{clause['id']}",
-            source_type="vague_clause",
-            source_id=clause["id"],
-            title=f"Clarify vague clause before acceptance: {clause_preview}",
-            description=clause.get("recommendation") or clause.get("risk_description") or "Clarify language before accepting the SOW.",
-            priority=clause.get("severity", "medium"),
-            recommended_owner="project_manager",
-            stage="pre_acceptance",
-            action_type="schedule_calendar_review",
-            execution_targets=["calendar"],
-            cta_label="Schedule clarification meeting",
-            recommended_actions=[
-                "Review wording with legal and delivery leads",
-                "Define measurable acceptance criteria and SLA boundaries",
-                "Capture needed redlines before acceptance",
-            ],
-        ))
+        clause_text = clause.get("clause_text", "")
+        clause_preview = clause_text[:60]
+        severity = clause.get("severity", "medium")
+        word_count = len(clause_text.split())
+        if severity in {"high", "critical"} or word_count >= 12 or "liab" in clause_text.lower() or "penalt" in clause_text.lower():
+            action_items.append(_base_action(
+                action_id=f"ACTION-{clause['id']}",
+                source_type="vague_clause",
+                source_id=clause["id"],
+                title=f"Clarify vague clause before acceptance: {clause_preview}",
+                description=clause.get("recommendation") or clause.get("risk_description") or "Clarify language before accepting the SOW.",
+                priority=severity,
+                recommended_owner="project_manager",
+                stage="pre_acceptance",
+                action_type="schedule_calendar_review",
+                execution_targets=["calendar"],
+                cta_label="Schedule clarification meeting",
+                recommended_actions=[
+                    "Review wording with legal and delivery leads",
+                    "Define measurable acceptance criteria and SLA boundaries",
+                    "Capture needed redlines before acceptance",
+                ],
+            ))
 
     for alert in alerts:
         numeric_risk = {
@@ -332,7 +386,7 @@ def _build_action_items(
             ],
         ))
 
-    if risk_assessment.get("risk_score", 0) >= 60:
+    if risk_assessment.get("risk_score", 0) >= 70:
         action_items.append(_base_action(
             action_id=f"ACTION-{sow_doc['_id']}-RISK-REVIEW",
             source_type="risk_assessment",
@@ -357,6 +411,7 @@ def _build_action_items(
             ],
         ))
 
+    if risk_assessment.get("risk_score", 0) >= 85 or risk_assessment.get("high_risk_obligations", 0) >= 2:
         action_items.append(_base_action(
             action_id=f"ACTION-{sow_doc['_id']}-DELIVERY-GOVERNANCE",
             source_type="risk_assessment",
@@ -499,6 +554,7 @@ async def upload_sow(
     temp_file_path: Optional[str] = None
 
     try:
+        upload_id = str(uuid.uuid4())[:8]
         file_bytes = await file.read()
         suffix = os.path.splitext(file.filename or "sow-upload.txt")[1] or ".txt"
 
@@ -510,7 +566,8 @@ async def upload_sow(
             file_path=temp_file_path,
             sow_number=sow_number,
             client_name=client_name,
-            project_name=project_name
+            project_name=project_name,
+            upload_id=upload_id
         )
 
         risk_assessment = await ingestion_agent.quick_risk_assessment(sow_doc)
@@ -545,6 +602,7 @@ async def upload_sow(
             "message": "SOW parsed and saved successfully",
             "sow": _sanitize_for_response(saved_doc),
             "risk_assessment": risk_assessment,
+            "llm_metadata": saved_doc.get("llm_metadata", sow_doc.get("llm_metadata", {})),
             "review_summary": {
                 "alerts": len(review_package["alerts"]),
                 "action_items": len(review_package["action_items"]),
@@ -601,6 +659,7 @@ async def list_sows(
                 "total_penalty_exposure": financial_summary.get("total_penalties_at_risk", 0),
                 "alerts_count": len(doc.get("alerts", [])),
                 "action_items_count": len(doc.get("action_items", [])),
+                "active_agent": doc.get("active_agent", "Ingestion Agent"),
                 "created_at": doc.get("created_at"),
                 "updated_at": doc.get("updated_at"),
             })
@@ -930,23 +989,41 @@ async def execute_sow_actions(
             "title": "Approved staged action items executed into downstream systems",
             "timestamp": execution_timestamp,
         })
+        # Add provisioning for milestones/deliverables
+        provisioning_results = {}
+        if requested_stage == "post_approval" or not requested_stage:
+            try:
+                provisioning_results = await provisioning_agent.provision_approved_sow(sow_id)
+                logger.info(f"Provisioning Agent ran for {sow_id}: {provisioning_results}")
+            except Exception as e:
+                logger.error(f"Provisioning Agent failed for {sow_id}: {e}")
+
+        # Update integration execution state
+        for stage, data in stage_results.items():
+            for target, config in data.items():
+                if config.get("issues_created") or config.get("meetings_created") or config.get("channels_created"):
+                    config["executed"] = True
+
+        doc["integration_execution"] = stage_results
         doc["updated_at"] = execution_timestamp
 
         saved_doc = await _save_sow_document(doc)
 
         return {
             "success": True,
-            "message": f"Approved items executed for SOW {sow_id}",
-            "issues_created": created_issues,
-            "meetings_created": created_meetings,
-            "teams_channels_created": created_teams_channels,
+            "message": f"Action items executed and milestones provisioned for {sow_id}",
+            "execution_summary": {
+                "github_issues_created": len(created_issues),
+                "calendar_meetings_created": len(created_meetings),
+                "teams_channels_created": len(created_teams_channels),
+                "provisioning_agent": provisioning_results
+            },
             "sow": _sanitize_for_response(saved_doc)
         }
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to execute approved items: {str(e)}")
-
 
 @router.get("/{sow_id}/timeline")
 async def get_sow_timeline(sow_id: str):

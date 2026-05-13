@@ -11,17 +11,31 @@ import {
   Chip,
   Alert,
   CircularProgress,
-  List,
-  ListItem,
-  ListItemText,
   Stack,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  Avatar,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
 import {
   Warning,
   CheckCircle,
   Error as ErrorIcon,
   Description,
-  AttachMoney,
+  SmartToy,
+  Event,
+  EditNote,
+  CloudUpload,
+  TrendingUp,
+  Shield,
+  Psychology,
+  AutoGraph,
+  InfoOutlined,
 } from '@mui/icons-material';
 
 interface DashboardSummary {
@@ -52,6 +66,7 @@ interface DashboardSow {
   total_penalty_exposure?: number;
   alerts_count?: number;
   high_risk_count?: number;
+  active_agent?: string;
   updated_at?: string;
 }
 
@@ -63,6 +78,14 @@ const Dashboard: React.FC = () => {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [sows, setSows] = useState<DashboardSow[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Upload state
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [sowNumber, setSowNumber] = useState('');
+  const [clientName, setClientName] = useState('');
+  const [projectName, setProjectName] = useState('');
 
   useEffect(() => {
     void fetchDashboardData();
@@ -98,6 +121,43 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const handleUploadSubmit = async () => {
+    if (!file || !sowNumber || !clientName || !projectName) {
+      alert('Please fill all fields and select a file.');
+      return;
+    }
+    
+    setUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('sow_number', sowNumber);
+    formData.append('client_name', clientName);
+    formData.append('project_name', projectName);
+
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/sow/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      if (response.ok) {
+        alert('SOW Uploaded Successfully!');
+        setUploadOpen(false);
+        setFile(null);
+        setSowNumber('');
+        setClientName('');
+        setProjectName('');
+        fetchDashboardData();
+      } else {
+        const error = await response.json();
+        alert(`Failed to upload: ${error.detail}`);
+      }
+    } catch (err) {
+      alert('Failed to upload SOW.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const recentSows = useMemo(
     () =>
       [...sows]
@@ -129,221 +189,294 @@ const Dashboard: React.FC = () => {
 
   return (
     <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h4" gutterBottom>
-          SOW Risk Intelligence Dashboard
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          Live portfolio view of obligations, financial exposure, risk concentration, and recovery opportunity.
-        </Typography>
+      {/* Top Section: Title & Agent Status */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 5 }}>
+        <Box>
+          <Typography variant="h3" sx={{ fontWeight: 800, mb: 0.5 }}>
+            Executive <span className="gradient-text">Command Center</span>
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            De-risking the SOW portfolio and optimizing outcome-based revenue conversion.
+          </Typography>
+        </Box>
+        <Paper className="glass-card" sx={{ p: 1.5, display: 'flex', alignItems: 'center', gap: 2, px: 3 }}>
+          <Box sx={{ position: 'relative' }}>
+            <Avatar sx={{ bgcolor: 'rgba(0, 230, 118, 0.1)', color: '#00e676', border: '1px solid rgba(0, 230, 118, 0.3)' }}>
+              <Psychology />
+            </Avatar>
+            <Box className="agent-pulse" sx={{ position: 'absolute', bottom: 0, right: 0, width: 12, height: 12, bgcolor: '#00e676', border: '2px solid #151518' }} />
+          </Box>
+          <Box>
+            <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 1 }}>
+              Agent Status: Active
+            </Typography>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              {recentSows.length > 0 && recentSows[0].active_agent 
+                ? `${recentSows[0].active_agent} is optimizing revenue...` 
+                : 'Strategist Agent scanning for leakage...'}
+            </Typography>
+          </Box>
+        </Paper>
       </Box>
 
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <Description color="primary" sx={{ mr: 1 }} />
-                <Typography variant="h6">Active SOWs</Typography>
+      {/* Main KPI Row */}
+      <Grid container spacing={3} sx={{ mb: 5 }}>
+        <Grid item xs={12} md={4}>
+          <Card className="glass-card revenue-uplift" sx={{ position: 'relative', overflow: 'hidden' }}>
+            <CardContent sx={{ p: 4 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+                <Typography variant="subtitle2" sx={{ color: 'primary.main', fontWeight: 700, textTransform: 'uppercase' }}>
+                  Revenue Uplift Potential
+                </Typography>
+                <TrendingUp color="primary" />
               </Box>
-              <Typography variant="h3">{summary.active_sows}</Typography>
-              <Typography variant="body2" color="text.secondary">
-                {summary.total_obligations} total obligations
+              <Typography variant="h2" sx={{ fontWeight: 800, mb: 1 }}>
+                ${summary.potential_revenue_recovery.toLocaleString()}
               </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Projected annual margin lift through outcome-based conversion.
+              </Typography>
+              <Box sx={{ mt: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <AutoGraph sx={{ fontSize: 16, color: 'primary.main' }} />
+                <Typography variant="caption" sx={{ color: 'primary.main', fontWeight: 700 }}>
+                  +24.5% vs Last Quarter
+                </Typography>
+              </Box>
             </CardContent>
           </Card>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <CheckCircle color="success" sx={{ mr: 1 }} />
-                <Typography variant="h6">SLA Compliance</Typography>
+        <Grid item xs={12} md={4}>
+          <Card className="glass-card risk-shield">
+            <CardContent sx={{ p: 4 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+                <Typography variant="subtitle2" sx={{ color: 'secondary.main', fontWeight: 700, textTransform: 'uppercase' }}>
+                  Risk Shield Protection
+                </Typography>
+                <Shield color="secondary" />
               </Box>
-              <Typography variant="h3">{summary.overall_compliance_rate}%</Typography>
-              <LinearProgress
-                variant="determinate"
-                value={summary.overall_compliance_rate}
-                color="success"
-                sx={{ mt: 1 }}
-              />
+              <Typography variant="h2" sx={{ fontWeight: 800, mb: 1 }}>
+                ${summary.total_penalty_exposure.toLocaleString()}
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Potential penalty exposure neutralized across {summary.active_sows} active SOWs.
+              </Typography>
+              <Box sx={{ mt: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Warning sx={{ fontSize: 16, color: 'secondary.main' }} />
+                <Typography variant="caption" sx={{ color: 'secondary.main', fontWeight: 700 }}>
+                  {summary.critical_alerts} High-Risk Items Flagged
+                </Typography>
+              </Box>
             </CardContent>
           </Card>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <AttachMoney color="warning" sx={{ mr: 1 }} />
-                <Typography variant="h6">Penalty Exposure</Typography>
-              </Box>
-              <Typography variant="h4">${summary.total_penalty_exposure.toLocaleString()}</Typography>
-              <Typography variant="body2" color="text.secondary">
-                ${summary.immediate_risk.toLocaleString()} immediate risk
+        <Grid item xs={12} md={4}>
+          <Card className="glass-card" sx={{ p: 1 }}>
+            <CardContent sx={{ p: 3 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 3, color: 'text.secondary', textTransform: 'uppercase' }}>
+                Portfolio Health Index
               </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                <ErrorIcon color="error" sx={{ mr: 1 }} />
-                <Typography variant="h6">Critical Alerts</Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', height: 120 }}>
+                <CircularProgress 
+                  variant="determinate" 
+                  value={summary.overall_compliance_rate} 
+                  size={120} 
+                  thickness={5} 
+                  sx={{ color: 'primary.main' }} 
+                />
+                <Box sx={{ position: 'absolute', textAlign: 'center' }}>
+                  <Typography variant="h4" sx={{ fontWeight: 800 }}>{summary.overall_compliance_rate}%</Typography>
+                  <Typography variant="caption">Compliant</Typography>
+                </Box>
               </Box>
-              <Typography variant="h3">{summary.critical_alerts}</Typography>
-              <Typography variant="body2" color="text.secondary">
-                {summary.at_risk_obligations} obligations at risk
-              </Typography>
+              <Box sx={{ mt: 4, display: 'flex', justifyContent: 'space-around' }}>
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700 }}>{summary.sla_status.compliant}</Typography>
+                  <Typography variant="caption" color="text.secondary">Safe</Typography>
+                </Box>
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: 'warning.main' }}>{summary.sla_status.at_risk}</Typography>
+                  <Typography variant="caption" color="text.secondary">At Risk</Typography>
+                </Box>
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: 'error.main' }}>{summary.sla_status.breached}</Typography>
+                  <Typography variant="caption" color="text.secondary">Breached</Typography>
+                </Box>
+              </Box>
             </CardContent>
           </Card>
         </Grid>
       </Grid>
 
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Financial Protection
-              </Typography>
-              <Stack spacing={1.5} sx={{ mt: 2 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="body2">Penalties Avoided YTD</Typography>
-                  <Typography variant="body2" fontWeight="bold" color="success.main">
-                    ${summary.penalties_avoided_ytd.toLocaleString()}
-                  </Typography>
+      <Grid container spacing={4} sx={{ mb: 5 }}>
+        {/* Risk Heatmap (Visual Placeholder) */}
+        <Grid item xs={12} md={8}>
+          <Card className="glass-card">
+            <CardContent sx={{ p: 4 }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+                <Box>
+                  <Typography variant="h6" sx={{ fontWeight: 800 }}>Portfolio <span className="gradient-text">Risk Heatmap</span></Typography>
+                  <Typography variant="body2" color="text.secondary">Concentration of financial exposure across client segments.</Typography>
                 </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="body2">Scope Creep Detected</Typography>
-                  <Typography variant="body2" fontWeight="bold" color="warning.main">
-                    {summary.scope_creep_detected} items
-                  </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="body2">Potential Recovery</Typography>
-                  <Typography variant="body2" fontWeight="bold" color="primary.main">
-                    ${summary.potential_revenue_recovery.toLocaleString()}
-                  </Typography>
-                </Box>
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                SLA Status
-              </Typography>
-              <Stack spacing={1.5} sx={{ mt: 2 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="body2">Compliant</Typography>
-                  <Chip label={summary.sla_status.compliant} color="success" size="small" />
-                </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="body2">At Risk</Typography>
-                  <Chip label={summary.sla_status.at_risk} color="warning" size="small" />
-                </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Typography variant="body2">Breached</Typography>
-                  <Chip label={summary.sla_status.breached} color="error" size="small" />
-                </Box>
-              </Stack>
-            </CardContent>
-          </Card>
-        </Grid>
-      </Grid>
-
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={7}>
-          <Paper sx={{ p: 3, height: '100%' }}>
-            <Typography variant="h6" gutterBottom>
-              Recently Updated SOWs
-            </Typography>
-            {recentSows.length === 0 ? (
-              <Alert severity="info">No SOWs available yet.</Alert>
-            ) : (
-              <List>
-                {recentSows.map((sow) => (
-                  <ListItem key={sow._id} divider>
-                    <ListItemText
-                      primary={sow.project_name}
-                      secondary={`${sow.client_name} · ${sow.sow_number} · ${sow.high_risk_count ?? 0} high-risk obligations · ${sow.alerts_count ?? 0} alerts`}
-                    />
-                    <Chip
-                      size="small"
-                      label={sow.review_status || 'pending'}
-                      color={sow.review_status === 'approved' ? 'success' : 'default'}
-                    />
-                  </ListItem>
+                <Tooltip title="Heatmap shows risk concentration vs revenue value">
+                  <IconButton size="small"><InfoOutlined /></IconButton>
+                </Tooltip>
+              </Box>
+              
+              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 2, height: 300 }}>
+                {[...Array(12)].map((_, i) => (
+                  <Box 
+                    key={i} 
+                    sx={{ 
+                      borderRadius: 2, 
+                      bgcolor: i % 5 === 0 ? 'rgba(244, 143, 177, 0.3)' : i % 3 === 0 ? 'rgba(255, 152, 0, 0.2)' : 'rgba(0, 230, 118, 0.1)',
+                      border: '1px solid rgba(255,255,255,0.05)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.2s',
+                      '&:hover': { transform: 'scale(1.05)', border: '1px solid rgba(255,255,255,0.2)' }
+                    }}
+                  >
+                    <Typography variant="caption" sx={{ fontWeight: 800, opacity: 0.7 }}>
+                      {['Finance', 'Healthcare', 'Retail', 'Tech', 'Energy', 'Gov', 'Media', 'Education'][i % 8]}
+                    </Typography>
+                  </Box>
                 ))}
-              </List>
-            )}
-          </Paper>
+              </Box>
+            </CardContent>
+          </Card>
         </Grid>
 
-        <Grid item xs={12} md={5}>
-          <Paper sx={{ p: 3, height: '100%' }}>
-            <Typography variant="h6" gutterBottom>
-              Portfolio Risk Mix
-            </Typography>
-            <Grid container spacing={2} sx={{ mt: 1 }}>
-              <Grid item xs={6}>
-                <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'error.light', borderRadius: 1 }}>
-                  <Typography variant="h4" color="error.dark">
-                    {riskBuckets.critical}
-                  </Typography>
-                  <Typography variant="body2" color="error.dark">
-                    Critical
-                  </Typography>
-                </Box>
-              </Grid>
-              <Grid item xs={6}>
-                <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'warning.light', borderRadius: 1 }}>
-                  <Typography variant="h4" color="warning.dark">
-                    {riskBuckets.high}
-                  </Typography>
-                  <Typography variant="body2" color="warning.dark">
-                    High
-                  </Typography>
-                </Box>
-              </Grid>
-              <Grid item xs={6}>
-                <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
-                  <Typography variant="h4" color="info.dark">
-                    {riskBuckets.medium}
-                  </Typography>
-                  <Typography variant="body2" color="info.dark">
-                    Medium
-                  </Typography>
-                </Box>
-              </Grid>
-              <Grid item xs={6}>
-                <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'success.light', borderRadius: 1 }}>
-                  <Typography variant="h4" color="success.dark">
-                    {riskBuckets.low}
-                  </Typography>
-                  <Typography variant="body2" color="success.dark">
-                    Low
-                  </Typography>
-                </Box>
-              </Grid>
-            </Grid>
-
-            <Alert severity="warning" icon={<Warning />} sx={{ mt: 3 }}>
-              <Typography variant="subtitle2">Immediate portfolio focus</Typography>
-              <Typography variant="body2">
-                {summary.critical_alerts} critical alerts and ${summary.immediate_risk.toLocaleString()} in immediate exposure require human review.
-              </Typography>
-            </Alert>
-          </Paper>
+        <Grid item xs={12} md={4}>
+          <Card className="glass-card" sx={{ height: '100%' }}>
+            <CardContent sx={{ p: 4 }}>
+              <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Typography variant="h6" sx={{ fontWeight: 800 }}>Transformation <span className="gradient-text">Queue</span></Typography>
+                <Button 
+                  size="small" 
+                  variant="outlined" 
+                  startIcon={<CloudUpload />} 
+                  onClick={() => setUploadOpen(true)}
+                  sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 700 }}
+                >
+                  Upload SOW
+                </Button>
+              </Box>
+              
+              <Stack spacing={2}>
+                {recentSows.map((sow) => (
+                  <Box 
+                    key={sow._id} 
+                    sx={{ 
+                      p: 2, 
+                      borderRadius: 3, 
+                      bgcolor: 'rgba(255,255,255,0.02)', 
+                      border: '1px solid rgba(255,255,255,0.05)',
+                      '&:hover': { bgcolor: 'rgba(255,255,255,0.05)' }
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>{sow.project_name}</Typography>
+                      <Chip 
+                        size="small" 
+                        label={sow.review_status || 'analyzing'} 
+                        sx={{ fontSize: '0.65rem', fontWeight: 900, textTransform: 'uppercase', bgcolor: sow.review_status === 'approved' ? 'primary.dark' : 'rgba(255,255,255,0.1)' }} 
+                      />
+                    </Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                      {sow.client_name} · ${sow.total_penalty_exposure?.toLocaleString() || 0} at risk
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      <Chip label="Strategist Active" size="small" sx={{ fontSize: '0.6rem', height: 18, bgcolor: 'rgba(0, 230, 118, 0.1)', color: 'primary.main', border: '1px solid rgba(0, 230, 118, 0.3)' }} />
+                    </Box>
+                  </Box>
+                ))}
+              </Stack>
+            </CardContent>
+          </Card>
         </Grid>
       </Grid>
+
+      {/* Resolution & Simulation Row */}
+      <Grid container spacing={4}>
+        <Grid item xs={12} md={6}>
+          <Card className="glass-card">
+            <CardContent sx={{ p: 4 }}>
+              <Typography variant="h6" sx={{ fontWeight: 800, mb: 3 }}>
+                Profitability <span className="gradient-text">Simulator</span>
+              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'flex-end', height: 200, mb: 4, gap: 4 }}>
+                <Box sx={{ flex: 1, textAlign: 'center' }}>
+                  <Typography variant="caption" color="error.main" sx={{ fontWeight: 800 }}>${(summary.active_sows * 15000).toLocaleString()}</Typography>
+                  <Box sx={{ height: 120, bgcolor: 'error.main', opacity: 0.6, borderRadius: 2, mt: 1, position: 'relative' }}>
+                     <Box sx={{ position: 'absolute', top: -25, left: 0, right: 0 }}><Typography variant="caption" sx={{ fontWeight: 700 }}>AS-IS (T&M)</Typography></Box>
+                  </Box>
+                </Box>
+                <Box sx={{ flex: 1, textAlign: 'center' }}>
+                  <Typography variant="caption" color="primary.main" sx={{ fontWeight: 800 }}>${(summary.active_sows * 15000 + summary.potential_revenue_recovery).toLocaleString()}</Typography>
+                  <Box sx={{ height: 180, bgcolor: 'primary.main', opacity: 0.8, borderRadius: 2, mt: 1, position: 'relative' }}>
+                     <Box sx={{ position: 'absolute', top: -25, left: 0, right: 0 }}><Typography variant="caption" sx={{ fontWeight: 700 }}>TARGET (OUTCOME)</Typography></Box>
+                  </Box>
+                </Box>
+              </Box>
+              <Typography variant="body2" color="text.secondary">
+                Conversion to Outcome-Based models eliminates headcount billing caps and rewards high-efficiency delivery teams.
+              </Typography>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid item xs={12} md={6}>
+          <Card className="glass-card">
+            <CardContent sx={{ p: 4 }}>
+              <Typography variant="h6" sx={{ fontWeight: 800, mb: 3 }}>
+                Agent: <span className="gradient-text">Strategist Insights</span>
+              </Typography>
+              <Stack spacing={2}>
+                {recentSows.filter(s => (s.high_risk_count ?? 0) > 0).slice(0, 2).map(sow => (
+                  <Box key={sow._id} sx={{ p: 2, border: '1px solid rgba(244, 143, 177, 0.2)', borderRadius: 2, bgcolor: 'rgba(244, 143, 177, 0.05)' }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>{sow.project_name}</Typography>
+                      <Chip label="High Leakage" size="small" color="error" sx={{ height: 18, fontSize: '0.6rem', fontWeight: 900 }} />
+                    </Box>
+                    <Typography variant="body2" sx={{ mb: 2, fontSize: '0.85rem' }}>Suggesting conversion to milestone-based billing to recapture ${sow.total_penalty_exposure?.toLocaleString()} in exposure.</Typography>
+                    <Stack direction="row" spacing={1}>
+                      <Button size="small" variant="contained" sx={{ textTransform: 'none', borderRadius: 2, fontWeight: 700 }}>Resolve via Rewrite</Button>
+                      <Button size="small" variant="outlined" sx={{ textTransform: 'none', borderRadius: 2, fontWeight: 700 }}>Schedule Align</Button>
+                    </Stack>
+                  </Box>
+                ))}
+              </Stack>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Upload Dialog */}
+      <Dialog open={uploadOpen} onClose={() => !uploading && setUploadOpen(false)} maxWidth="sm" fullWidth PaperProps={{ className: 'glass-card' }}>
+        <DialogTitle sx={{ fontWeight: 800 }}>Upload <span className="gradient-text">Statement of Work</span></DialogTitle>
+        <DialogContent>
+          <Stack spacing={3} sx={{ mt: 1 }}>
+            <TextField label="SOW Number" fullWidth required value={sowNumber} onChange={(e) => setSowNumber(e.target.value)} />
+            <TextField label="Client Name" fullWidth required value={clientName} onChange={(e) => setClientName(e.target.value)} />
+            <TextField label="Project Name" fullWidth required value={projectName} onChange={(e) => setProjectName(e.target.value)} />
+            <Box sx={{ p: 3, border: '2px dashed rgba(255,255,255,0.1)', borderRadius: 3, textAlign: 'center' }}>
+              <CloudUpload sx={{ fontSize: 40, color: 'primary.main', mb: 1, opacity: 0.5 }} />
+              <Typography variant="body2" gutterBottom sx={{ fontWeight: 600 }}>Drag & drop document or click to browse</Typography>
+              <Typography variant="caption" color="text.secondary">PDF, DOCX, or TXT supported</Typography>
+              <input type="file" accept=".pdf,.docx,.txt" onChange={(e) => setFile(e.target.files?.[0] || null)} style={{ marginTop: 16 }} />
+            </Box>
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+          <Button onClick={() => setUploadOpen(false)} disabled={uploading} sx={{ fontWeight: 700 }}>Cancel</Button>
+          <Button variant="contained" onClick={handleUploadSubmit} disabled={uploading} sx={{ fontWeight: 700, borderRadius: 2, px: 4 }}>
+            {uploading ? <CircularProgress size={24} color="inherit" /> : 'Begin Transformation'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };

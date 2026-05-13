@@ -14,6 +14,12 @@ from ..models.sow_models import (
     AlertSeverity,
     ObligationStatus
 )
+from ..core.cloudant_db import cloudant_db
+from ..core.config import settings
+import requests
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class MonitoringAgent:
@@ -60,16 +66,24 @@ class MonitoringAgent:
         Returns:
             List of compliance events
         """
-        # TODO: Fetch SOW from database
-        # For demo, use sample data
-        obligations = self._get_demo_obligations(sow_id)
+        doc = await cloudant_db.get_document(sow_id)
+        if not doc:
+            logger.error(f"SOW {sow_id} not found for monitoring")
+            return []
+            
+        obligations = doc.get("obligations", [])
         
         events = []
         for obligation in obligations:
             event = await self._check_obligation_compliance(sow_id, obligation)
             if event:
                 events.append(event)
-        
+                # Ensure the new alerts are saved to the SOW document
+                doc.setdefault("alerts", []).append(event)
+                
+        if events:
+            await cloudant_db.update_document(sow_id, doc)
+            
         return events
     
     async def _check_obligation_compliance(
@@ -92,12 +106,48 @@ class MonitoringAgent:
             return None
 
         try:
-            deadline = datetime.fromisoformat(deadline_raw)
+            deadline = datetime.fromisoformat(deadline_raw.replace("Z", "+00:00"))
         except (TypeError, ValueError):
-            return None
+            try:
+                deadline = datetime.fromisoformat(f"{deadline_raw}T00:00:00+00:00")
+            except (TypeError, ValueError):
+                return None
 
-        now = datetime.utcnow()
-        days_remaining = (deadline - now).days
+        # Fetch GitHub issue if mapped
+        mapping = obligation.get("mapped_to", {})
+        issue_number = mapping.get("external_id")
+        
+        is_closed = False
+        if issue_number and mapping.get("integration_type") == "github":
+            global_settings = await cloudant_db.get_document("global_api_settings") or {}
+            token = global_settings.get("github_token") or settings.GITHUB_TOKEN
+            owner = global_settings.get("github_owner") or settings.GITHUB_OWNER
+            repo = global_settings.get("github_repo") or settings.GITHUB_REPO
+            
+            if token and owner and repo:
+                headers = {
+                    "Authorization": f"token {token}",
+                    "Accept": "application/vnd.github.v3+json",
+                }
+                resp = requests.get(f"https://api.github.com/repos/{owner}/{repo}/issues/{issue_number}", headers=headers)
+                if resp.status_code == 200:
+                    issue_data = resp.json()
+                    is_closed = issue_data.get("state") == "closed"
+                    # Update progress based on issue state
+                    if is_closed:
+                        obligation["progress_percentage"] = 100
+                        obligation["status"] = ObligationStatus.COMPLETED.value
+
+        if is_closed:
+            return None # No alert needed if it's closed
+
+        now = datetime.utcnow().astimezone(deadline.tzinfo)
+        total_time = (deadline - datetime.fromisoformat(obligation.get("created_at", now.isoformat()).replace("Z", "+00:00"))).total_seconds()
+        if total_time <= 0:
+            total_time = 86400 * 30 # fallback to 30 days
+            
+        time_remaining = (deadline - now).total_seconds()
+        days_remaining = time_remaining / 86400.0
         
         current_progress = obligation.get("progress_percentage", 0)
         required_progress = 100
@@ -109,40 +159,40 @@ class MonitoringAgent:
         predicted_completion = self._predict_completion(
             current_progress,
             velocity_trend,
-            days_remaining
+            int(days_remaining)
         )
         
-        # Determine if at risk
-        severity = self._determine_severity(
-            days_remaining,
-            current_progress,
-            velocity_trend
-        )
+        # ALERTER LOGIC: Check if within 20% of SLA deadline
+        time_ratio = time_remaining / total_time
+        severity = None
         
-        if severity:
-            # Calculate penalty exposure
-            penalty_exposure = self._calculate_penalty_exposure(
-                obligation,
-                days_remaining,
-                predicted_completion
-            )
+        if time_remaining < 0:
+            severity = AlertSeverity.CRITICAL.value
+            event_type = EventType.PENALTY_TRIGGERED.value
+        elif time_ratio <= 0.20:
+            severity = AlertSeverity.HIGH.value
+            event_type = EventType.DEADLINE_WARNING.value
+            logger.warning(f"ALERT: Issue {issue_number} is within 20% of SLA but not closed!")
+        else:
+            severity = self._determine_severity(int(days_remaining), current_progress, velocity_trend)
+            event_type = EventType.DEADLINE_WARNING.value
             
-            # Create compliance event
-            event = create_compliance_event_document(
+        if severity:
+            penalty_exposure = self._calculate_penalty_exposure(obligation, int(days_remaining), predicted_completion)
+            
+            # Create alert document instead of just compliance event to show in UI
+            alert_doc = create_alert_document(
                 sow_id=sow_id,
                 obligation_id=obligation["id"],
-                event_type=EventType.DEADLINE_WARNING.value,
+                alert_type=event_type,
                 severity=severity,
-                days_remaining=days_remaining,
-                current_progress=current_progress,
-                required_progress=required_progress,
-                velocity_trend=velocity_trend,
-                predicted_completion=predicted_completion.isoformat() if predicted_completion else None,
-                penalty_exposure=penalty_exposure
+                title=f"SLA Warning: {obligation.get('description')}",
+                message=f"Ticket is within 20% of SLA deadline but not closed. Days remaining: {int(days_remaining)}",
+                days_until_penalty=int(days_remaining),
+                penalty_amount=penalty_exposure
             )
+            return alert_doc
             
-            return event
-        
         return None
     
     def _calculate_velocity_trend(self, obligation: Dict[str, Any]) -> str:
@@ -276,29 +326,44 @@ class MonitoringAgent:
             List of scope creep detections
         """
         scope_creep_items = []
-        
-        # TODO: Implement actual scope creep detection
-        # For demo, return sample data
-        demo_scope_creep = {
-            "description": "Advanced Analytics Dashboard",
-            "hours_spent": 40,
-            "cost": 10000,
-            "team_members": ["Developer A", "Developer B"],
-            "github_commits": 45,
-            "jira_tickets": ["ACME-789", "ACME-790"]
-        }
-        
+
+        github_commits = github_data.get("commit_count", 0) or len(github_data.get("commits", []))
+        jira_ticket_count = jira_data.get("ticket_count", 0) or len(jira_data.get("tickets", []))
+        extra_hours = github_data.get("hours_spent", 0) or jira_data.get("hours_spent", 0) or 0
+        detected_work = github_data.get("detected_work") or jira_data.get("detected_work") or ""
+
+        if not any([github_commits, jira_ticket_count, extra_hours, detected_work]):
+            return []
+
+        revenue_estimate = float(
+            github_data.get("potential_revenue")
+            or jira_data.get("potential_revenue")
+            or github_data.get("cost")
+            or jira_data.get("cost")
+            or extra_hours * 250
+            or 0
+        )
+
+        summary_description = detected_work or "Additional delivery work detected outside baseline SOW scope"
+
         scope_creep_doc = create_scope_creep_document(
             sow_id=sow_id,
-            detected_work=demo_scope_creep,
+            detected_work={
+                "description": summary_description,
+                "hours_spent": extra_hours,
+                "cost": github_data.get("cost") or jira_data.get("cost") or revenue_estimate,
+                "team_members": github_data.get("team_members", []) or jira_data.get("team_members", []),
+                "github_commits": github_commits,
+                "jira_tickets": jira_data.get("tickets", []),
+            },
             sow_match=None,
-            recommendation="Create Change Request CR-2024-05 for $15,000",
-            potential_revenue=15000,
+            recommendation=f"Validate scope change and consider recovery of ${revenue_estimate:,.0f}" if revenue_estimate else "Validate scope change and assess commercial recovery",
+            potential_revenue=revenue_estimate,
             status="detected"
         )
-        
+
         scope_creep_items.append(scope_creep_doc)
-        
+
         return scope_creep_items
     
     def _get_demo_obligations(self, sow_id: str) -> List[Dict[str, Any]]:

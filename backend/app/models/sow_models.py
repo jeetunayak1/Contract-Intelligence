@@ -101,8 +101,9 @@ def create_sow_document(
     Returns:
         SOW document dictionary
     """
+    upload_suffix = kwargs.get("upload_id") or str(uuid.uuid4())[:8]
     doc = {
-        "_id": kwargs.get("_id", f"SOW-{sow_number}"),
+        "_id": kwargs.get("_id", f"SOW-{sow_number}-{upload_suffix}"),
         "type": "sow",
         "sow_number": sow_number,
         "client_name": client_name,
@@ -129,7 +130,8 @@ def create_sow_document(
         "created_at": kwargs.get("created_at", datetime.utcnow().isoformat()),
         "updated_at": kwargs.get("updated_at", datetime.utcnow().isoformat()),
         "parsed_at": kwargs.get("parsed_at"),
-        "parsed_by": kwargs.get("parsed_by", "ingestion_agent")
+        "parsed_by": kwargs.get("parsed_by", "ingestion_agent"),
+        "active_agent": kwargs.get("active_agent")
     }
     
     return {k: v for k, v in doc.items() if v is not None}

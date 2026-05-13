@@ -11,9 +11,25 @@ from pathlib import Path
 
 from docx import Document
 import pdfplumber
-from ibm_watsonx_ai.foundation_models import ModelInference
-from ibm_watsonx_ai.metanames import GenTextParamsMetaNames as GenParams
-from ibm_watsonx_ai import Credentials
+try:
+    from ibm_watsonx_ai.foundation_models import ModelInference
+    from ibm_watsonx_ai.metanames import GenTextParamsMetaNames as GenParams
+    from ibm_watsonx_ai import Credentials
+except ImportError:
+    ModelInference = None
+    GenParams = None
+    Credentials = None
+
+# Google GenAI imports
+try:
+    from google import genai
+    from google.genai import types
+except ImportError:
+    genai = None
+    types = None
+
+from ..core.config import settings
+from .transformation_agent import transformation_agent
 
 from ..models.sow_models import (
     create_sow_document,
@@ -59,9 +75,15 @@ class IngestionAgent:
         self.watsonx_url = watsonx_url
         self.watsonx_model_id = watsonx_model_id
         self.model: Optional[ModelInference] = None
+        self.gemini_client = None
         
-        if watsonx_api_key and watsonx_project_id:
-            self._initialize_watsonx()
+        self.llm_provider = settings.LLM_PROVIDER.lower()
+        
+        if self.llm_provider == "ibm":
+            if watsonx_api_key and watsonx_project_id:
+                self._initialize_watsonx()
+        elif self.llm_provider == "gcp":
+            self._initialize_gemini()
     
     def _initialize_watsonx(self):
         """Initialize watsonx.ai client."""
@@ -86,13 +108,23 @@ class IngestionAgent:
         except Exception as exc:
             logger.exception("Failed to initialize watsonx.ai client: %s", exc)
             self.model = None
+
+    def _initialize_gemini(self):
+        """Initialize Google GenAI client."""
+        try:
+            self.gemini_client = genai.Client(api_key=settings.GOOGLE_API_KEY)
+            logger.info("Google GenAI client initialized for SOW ingestion using Google AI SDK")
+        except Exception as exc:
+            logger.exception("Failed to initialize Google GenAI client: %s", exc)
+            self.gemini_client = None
     
     async def parse_sow_document(
         self,
         file_path: str,
         sow_number: str,
         client_name: str,
-        project_name: str
+        project_name: str,
+        upload_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Parse a SOW document and extract all relevant information
@@ -109,41 +141,85 @@ class IngestionAgent:
         # Step 1: Extract text from document
         text_content = await self._extract_text(file_path)
         
-        # Step 2: Use watsonx.ai to parse structured data
-        parsed_data = await self._parse_with_watsonx(text_content)
+        # Step 1.5: Multi-Agent Orchestrator - Classification
+        classification = self._classification_agent(text_content)
+        if classification == "T&M":
+            active_agent = "Revenue Optimizer Agent"
+        else:
+            active_agent = "Risk Mitigation Agent"
+        logger.info(f"Classification Agent identified SOW as {classification}. Routing to {active_agent}.")
         
+        # Step 2: Use LLM to parse structured data
+        parsed_data, llm_metadata = await self._parse_with_llm(text_content, active_agent)
+        
+        normalized_payload = llm_metadata.get("normalized_response") if isinstance(llm_metadata, dict) else None
+        extraction_source = normalized_payload if isinstance(normalized_payload, dict) else parsed_data
+
         # Step 3: Extract obligations
-        obligations = await self._extract_obligations(parsed_data, sow_number)
+        obligations = await self._extract_obligations(extraction_source, sow_number)
         
         # Step 4: Extract SLA terms
-        sla_terms = await self._extract_sla_terms(parsed_data, sow_number)
+        sla_terms = await self._extract_sla_terms(extraction_source, sow_number)
         
         # Step 5: Detect vague clauses
-        vague_clauses = await self._detect_vague_clauses(parsed_data, sow_number)
+        vague_clauses = await self._detect_vague_clauses(extraction_source, sow_number)
         
         # Step 6: Calculate financial summary
         financial_summary = self._calculate_financial_summary(obligations, sla_terms)
+        
+        # Step 6.5: Transform T&M to Outcome-Based if needed
+        transformation_plan = None
+        if active_agent == "Revenue Optimizer Agent":
+            try:
+                transformation_plan = await transformation_agent.transform_tm_to_outcome(parsed_data, text_content)
+                logger.info("Transformation Agent generated outcome-based rewrite plan.")
+            except Exception as e:
+                logger.error(f"Transformation Agent failed: {e}")
         
         # Step 7: Create SOW document
         sow_doc = create_sow_document(
             sow_number=sow_number,
             client_name=client_name,
             project_name=project_name,
-            start_date=parsed_data.get("start_date", datetime.utcnow().isoformat()),
-            end_date=parsed_data.get("end_date", datetime.utcnow().isoformat()),
-            total_value=parsed_data.get("total_value", 0),
-            currency=parsed_data.get("currency", "USD"),
-            description=parsed_data.get("description"),
+            upload_id=upload_id,
+            start_date=extraction_source.get("start_date", datetime.utcnow().isoformat()),
+            end_date=extraction_source.get("end_date", datetime.utcnow().isoformat()),
+            total_value=extraction_source.get("total_value", 0),
+            currency=extraction_source.get("currency", "USD"),
+            description=extraction_source.get("description"),
             obligations=obligations,
             sla_terms=sla_terms,
             vague_clauses=vague_clauses,
             financial_summary=financial_summary,
             file_url=file_path,
             file_name=Path(file_path).name,
-            parsed_at=datetime.utcnow().isoformat()
+            parsed_at=datetime.utcnow().isoformat(),
+            active_agent=active_agent
         )
         
+        if transformation_plan:
+            sow_doc["transformation_plan"] = transformation_plan
+
+        sow_doc["llm_metadata"] = llm_metadata
+            
         return sow_doc
+        
+    def _classification_agent(self, text: str) -> str:
+        """
+        Classification Agent: Analyzes the text for keywords like 'FTE', 'Hourly Rate', and 'T&M' 
+        vs 'Milestone', 'KPI', and 'Deliverable'.
+        """
+        text_lower = text.lower()
+        tm_keywords = ['fte', 'hourly rate', 't&m', 'time and material', 'time & material']
+        outcome_keywords = ['milestone', 'kpi', 'deliverable', 'fixed price', 'outcome-based', 'outcome based']
+        
+        tm_count = sum(text_lower.count(k) for k in tm_keywords)
+        outcome_count = sum(text_lower.count(k) for k in outcome_keywords)
+        
+        if tm_count > 0 and tm_count >= outcome_count:
+            return "T&M"
+        else:
+            return "Outcome-Based"
     
     async def _extract_text(self, file_path: str) -> str:
         """
@@ -174,28 +250,133 @@ class IngestionAgent:
 
         return text_content
     
-    async def _parse_with_watsonx(self, text_content: str) -> Dict[str, Any]:
+    async def _parse_with_llm(self, text_content: str, active_agent: str = "Risk Mitigation Agent") -> tuple[Dict[str, Any], Dict[str, Any]]:
         """
-        Use watsonx.ai to parse SOW text into structured data.
+        Use LLM (watsonx.ai or Gemini) to parse SOW text into structured data.
         Falls back to deterministic extraction if model invocation fails.
+        Returns parsed data plus metadata about the parsing path used.
         """
-        prompt = self._create_parsing_prompt(text_content)
+        prompt = self._create_parsing_prompt(text_content, active_agent)
 
-        if self.model:
+        if self.llm_provider == "ibm" and self.model:
             try:
                 response = self.model.generate_text(prompt=prompt)
                 parsed = self._extract_json_from_response(response)
-                return self._normalize_parsed_data(parsed)
+                return self._normalize_parsed_data(parsed), {
+                    "provider": "ibm",
+                    "model": self.watsonx_model_id,
+                    "used_llm": True,
+                    "used_fallback": False,
+                    "source": "watsonx",
+                    "active_agent": active_agent,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "error": None,
+                }
             except Exception as exc:
                 logger.exception("watsonx.ai parsing failed, falling back to heuristic extraction: %s", exc)
+                fallback_metadata = {
+                    "provider": "ibm",
+                    "model": self.watsonx_model_id,
+                    "used_llm": False,
+                    "used_fallback": True,
+                    "source": "heuristic",
+                    "active_agent": active_agent,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "error": str(exc),
+                }
+                logger.warning("Using heuristic parsing fallback because LLM output was unavailable")
+                return self._heuristic_parse_text(text_content), fallback_metadata
+                
+        elif self.llm_provider == "gcp" and self.gemini_client:
+            model_id = settings.GEMINI_MODEL_ID
+            try:
+                # Set a timeout for the AI call to avoid hanging
+                import asyncio
+                response = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        self.gemini_client.models.generate_content,
+                        model=model_id,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            temperature=0,
+                            response_mime_type="application/json",
+                        )
+                    ),
+                    timeout=30.0
+                )
+                response_text = getattr(response, "text", "") or ""
+                parsed = self._extract_json_from_response(response_text)
+                normalized = self._normalize_parsed_data(parsed)
 
-        logger.warning("Using heuristic parsing fallback because watsonx.ai output was unavailable")
-        return self._heuristic_parse_text(text_content)
+                response_preview = response_text[:4000]
+                if len(response_text) > 4000:
+                    response_preview += "...[truncated]"
+
+                return normalized, {
+                    "provider": "gcp",
+                    "model": model_id,
+                    "used_llm": True,
+                    "used_fallback": False,
+                    "source": "gemini",
+                    "active_agent": active_agent,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "error": None,
+                    "response_text": response_text,
+                    "response_preview": response_preview,
+                    "parsed_response": parsed,
+                    "normalized_response": normalized,
+                }
+            except Exception as exc:
+                logger.error(f"Gemini parsing failed (Real AI call failed): {exc}")
+                if "PERMISSION_DENIED" in str(exc):
+                    logger.error("TIP: Enable 'Vertex AI API' in GCP console or check project permissions.")
+                logger.warning("Using heuristic parsing fallback because LLM output was unavailable")
+                return self._heuristic_parse_text(text_content), {
+                    "provider": "gcp",
+                    "model": model_id,
+                    "used_llm": False,
+                    "used_fallback": True,
+                    "source": "heuristic",
+                    "active_agent": active_agent,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "error": str(exc),
+                }
+
+        logger.warning("Using heuristic parsing fallback because LLM output was unavailable")
+        return self._heuristic_parse_text(text_content), {
+            "provider": self.llm_provider,
+            "model": settings.GEMINI_MODEL_ID if self.llm_provider == "gcp" else self.watsonx_model_id,
+            "used_llm": False,
+            "used_fallback": True,
+            "source": "heuristic",
+            "active_agent": active_agent,
+            "timestamp": datetime.utcnow().isoformat(),
+            "error": "LLM client unavailable",
+        }
     
-    def _create_parsing_prompt(self, text_content: str) -> str:
-        """Create prompt for watsonx.ai to parse SOW."""
+    def _create_parsing_prompt(self, text_content: str, active_agent: str) -> str:
+        """Create prompt for LLM to parse SOW based on the active agent."""
+        
+        if active_agent == "Revenue Optimizer Agent":
+            agent_role = "You are a Revenue Optimizer Agent analyzing a Time & Materials (T&M) Statement of Work."
+            extraction_focus = """
+Extraction requirements:
+- Focus heavily on identifying revenue leakages, unbilled FTE hours, and scope creep risks.
+- Suggest Outcome-Based conversions where appropriate.
+- Extract any vague clauses that could lead to unbillable work or margin erosion.
+- Recommend ways to convert hourly-rate tasks into fixed-price or milestone-based deliverables.
+"""
+        else:
+            agent_role = "You are a Risk Mitigation Agent analyzing an Outcome-Based Statement of Work."
+            extraction_focus = """
+Extraction requirements:
+- Extract ALL meaningful vague, ambiguous, subjective, under-specified, one-sided, risky, or commercially dangerous clauses.
+- Focus heavily on vague acceptance criteria, liability traps, and delivery risks.
+- Capture clauses involving unlimited revisions, uncapped liabilities, or subjective sign-off criteria.
+"""
+
         return f"""
-You are a senior contract risk analyst reviewing a Statement of Work for delivery, commercial, legal, and operational risk.
+{agent_role}
 
 Return ONLY valid JSON. Do not add markdown, comments, or explanation text.
 
@@ -233,12 +414,7 @@ Use this exact JSON schema:
   ]
 }}
 
-Extraction requirements:
-- Extract ALL meaningful vague, ambiguous, subjective, under-specified, one-sided, risky, or commercially dangerous clauses.
-- Do not limit vague_clauses to style issues only. Include delivery risk, acceptance ambiguity, dependency ambiguity, resourcing ambiguity, support ambiguity, liability exposure, payment ambiguity, and change-request ambiguity.
-- Capture clauses even if they are not explicitly labeled as risks.
-- Prefer more coverage rather than fewer items when a clause may create delivery dispute, missed SLA, hidden scope, revenue leakage, or unbounded obligations.
-- Preserve the original clause text as closely as possible.
+{extraction_focus}
 
 Specifically look for clauses involving:
 - reasonable efforts, best efforts, commercially reasonable efforts
@@ -273,13 +449,52 @@ SOW TEXT:
         obligations = []
         
         for deliverable in parsed_data.get("deliverables", []):
-            # Assess risk level based on penalty amount
             penalty = deliverable.get("penalty_amount", 0)
+            deadline = deliverable.get("deadline", "")
+            description = deliverable.get("description", "")
+            penalty_frequency = deliverable.get("penalty_frequency", "per_day")
+
+            urgency_score = 0
+            if deadline:
+                try:
+                    deadline_dt = datetime.fromisoformat(str(deadline).replace("Z", "+00:00"))
+                    days_until_deadline = (deadline_dt - datetime.utcnow().replace(tzinfo=deadline_dt.tzinfo)).total_seconds() / 86400.0
+                    if days_until_deadline <= 7:
+                        urgency_score += 3
+                    elif days_until_deadline <= 30:
+                        urgency_score += 2
+                    elif days_until_deadline <= 60:
+                        urgency_score += 1
+                except ValueError:
+                    urgency_score += 1
+
+            commercial_score = 0
             if penalty >= 5000:
-                risk_level = RiskLevel.CRITICAL.value
+                commercial_score += 3
             elif penalty >= 3000:
-                risk_level = RiskLevel.HIGH.value
+                commercial_score += 2
             elif penalty >= 1000:
+                commercial_score += 1
+
+            if penalty_frequency in {"per_hour", "per_day"}:
+                commercial_score += 1
+
+            description_lower = description.lower()
+            complexity_score = 0
+            risk_keywords = [
+                "integration", "migration", "security", "compliance", "production",
+                "cutover", "go-live", "acceptance", "sla", "penalty", "indemnity"
+            ]
+            complexity_score += sum(1 for keyword in risk_keywords if keyword in description_lower)
+            if len(description.split()) >= 12:
+                complexity_score += 1
+
+            total_score = urgency_score + commercial_score + complexity_score
+            if total_score >= 6:
+                risk_level = RiskLevel.CRITICAL.value
+            elif total_score >= 4:
+                risk_level = RiskLevel.HIGH.value
+            elif total_score >= 2:
                 risk_level = RiskLevel.MEDIUM.value
             else:
                 risk_level = RiskLevel.LOW.value
@@ -287,13 +502,14 @@ SOW TEXT:
             obligation = create_obligation(
                 sow_id=sow_id,
                 obligation_type=ObligationType.DELIVERABLE.value,
-                description=deliverable.get("description", ""),
-                deadline=deliverable.get("deadline", ""),
+                description=description,
+                deadline=deadline,
                 penalty_amount=penalty,
-                penalty_frequency=deliverable.get("penalty_frequency", "per_day"),
+                penalty_frequency=penalty_frequency,
                 risk_level=risk_level,
                 status="not_started",
-                progress_percentage=0
+                progress_percentage=0,
+                dependencies=["client_signoff"] if "acceptance" in description_lower or "sign-off" in description_lower else []
             )
             obligations.append(obligation)
         
@@ -329,12 +545,33 @@ SOW TEXT:
         vague_clauses = []
         
         for clause in parsed_data.get("vague_clauses", []):
+            clause_text = clause.get("clause", "")
+            risk_description = clause.get("risk", "")
+            combined_text = f"{clause_text} {risk_description}".lower()
+
+            severity_score = 0
+            if any(keyword in combined_text for keyword in ["unlimited", "uncapped", "indemn", "liabil", "penalt", "service credit"]):
+                severity_score += 3
+            if any(keyword in combined_text for keyword in ["acceptance", "sign-off", "subjective", "reasonable efforts", "best efforts"]):
+                severity_score += 2
+            if any(keyword in combined_text for keyword in ["dependency", "third-party", "assumption", "as needed", "promptly"]):
+                severity_score += 1
+            if len(clause_text.split()) >= 12:
+                severity_score += 1
+
+            if severity_score >= 4:
+                severity = RiskLevel.HIGH.value
+            elif severity_score >= 2:
+                severity = RiskLevel.MEDIUM.value
+            else:
+                severity = RiskLevel.LOW.value
+
             vague_clause = create_vague_clause(
                 sow_id=sow_id,
-                clause_text=clause.get("clause", ""),
-                risk_description=clause.get("risk", ""),
+                clause_text=clause_text,
+                risk_description=risk_description,
                 recommendation=clause.get("recommendation"),
-                severity=RiskLevel.MEDIUM.value
+                severity=severity
             )
             vague_clauses.append(vague_clause)
         
