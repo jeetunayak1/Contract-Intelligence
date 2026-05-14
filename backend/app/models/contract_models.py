@@ -78,11 +78,19 @@ class QualityKPI(BaseModel):
         if v is not None and not 0 <= v <= 100:
             raise ValueError('Percentage must be between 0 and 100')
         return v
+    
+    @field_validator('target_value', mode='before')
+    @classmethod
+    def validate_target_value(cls, v):
+        # Convert int/float to string if needed
+        if v is not None and not isinstance(v, str):
+            return str(v)
+        return v
 
 
 class ServiceCredit(BaseModel):
     """Service credit for SLA breach"""
-    priority: Optional[PriorityLevel] = Field(None, description="Incident priority if applicable")
+    priority: Optional[str] = Field(None, description="Incident priority or tier if applicable")
     breach_condition: str = Field(..., description="Condition that triggers credit")
     credit_percent: float = Field(..., description="Credit percentage of monthly fee")
     monthly_cap_percent: Optional[float] = Field(None, description="Maximum credit per month")
@@ -115,8 +123,8 @@ class EscalationLevel(BaseModel):
 class ContractMetadata(BaseModel):
     """Contract metadata and basic information"""
     contract_id: Optional[str] = Field(None, description="Unique contract identifier")
-    client_name: str = Field(..., description="Client organization name")
-    provider_name: str = Field(..., description="Service provider name")
+    client_name: Optional[str] = Field(None, description="Client organization name")
+    provider_name: Optional[str] = Field(None, description="Service provider name")
     effective_date: Optional[str] = Field(None, description="Contract effective date")
     end_date: Optional[str] = Field(None, description="Contract end date")
     contract_period_years: Optional[int] = Field(None, description="Contract duration in years")

@@ -14,7 +14,11 @@ import {
   Tab,
   Paper,
   Divider,
-  CircularProgress
+  CircularProgress,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel
 } from '@mui/material';
 import {
   Warning as WarningIcon,
@@ -106,12 +110,24 @@ const WarRoom: React.FC = () => {
     
     try {
       const response = await fetch(
-        `${API_BASE}/compliance/analyze?contract_id=${selectedContract}&monthly_fee=100000`
+        `${API_BASE}/compliance/analyze?contract_id=${selectedContract}&monthly_fee=100000`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
       );
+      
+      if (!response.ok) {
+        throw new Error(`Analysis failed: ${response.statusText}`);
+      }
+      
       const data = await response.json();
       setReport(data);
     } catch (error) {
       console.error('Analysis failed:', error);
+      alert('Analysis failed. Please check console for details.');
     } finally {
       setAnalyzing(false);
     }
@@ -154,24 +170,77 @@ const WarRoom: React.FC = () => {
             </Box>
           </Box>
           
-          <Button
-            variant="contained"
-            size="large"
-            startIcon={analyzing ? <CircularProgress size={20} /> : <PlayArrowIcon />}
-            onClick={runAnalysis}
-            disabled={analyzing || !selectedContract}
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+            <FormControl sx={{ minWidth: 300 }}>
+              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Select Contract</InputLabel>
+              <Select
+                value={selectedContract}
+                onChange={(e) => setSelectedContract(e.target.value)}
+                label="Select Contract"
+                sx={{
+                  color: 'white',
+                  bgcolor: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(0, 230, 118, 0.3)',
+                  '& .MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'rgba(0, 230, 118, 0.3)'
+                  },
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'rgba(0, 230, 118, 0.5)'
+                  },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                    borderColor: 'primary.main'
+                  }
+                }}
+              >
+                {contracts.map((contract) => (
+                  <MenuItem key={contract.contract_id} value={contract.contract_id}>
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {contract.provider || 'Unknown Provider'}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>
+                        {contract.filename}
+                      </Typography>
+                    </Box>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            
+            <Button
+              variant="contained"
+              size="large"
+              startIcon={analyzing ? <CircularProgress size={20} /> : <PlayArrowIcon />}
+              onClick={runAnalysis}
+              disabled={analyzing || !selectedContract}
+              sx={{
+                bgcolor: 'primary.main',
+                color: 'black',
+                fontWeight: 700,
+                px: 4,
+                py: 1.5,
+                '&:hover': { bgcolor: 'primary.light' }
+              }}
+            >
+              {analyzing ? 'ANALYZING...' : 'RUN ANALYSIS'}
+            </Button>
+          </Box>
+        </Box>
+        
+        {selectedContract && contracts.length > 0 && (
+          <Alert
+            severity="info"
             sx={{
-              bgcolor: 'primary.main',
-              color: 'black',
-              fontWeight: 700,
-              px: 4,
-              py: 1.5,
-              '&:hover': { bgcolor: 'primary.light' }
+              bgcolor: 'rgba(0, 188, 212, 0.1)',
+              border: '1px solid rgba(0, 188, 212, 0.3)',
+              color: 'white'
             }}
           >
-            {analyzing ? 'ANALYZING...' : 'RUN ANALYSIS'}
-          </Button>
-        </Box>
+            <Typography variant="body2">
+              <strong>Selected Contract:</strong> {contracts.find(c => c.contract_id === selectedContract)?.provider} - {contracts.find(c => c.contract_id === selectedContract)?.filename}
+            </Typography>
+          </Alert>
+        )}
       </Box>
 
       {/* KPI Cards */}
@@ -299,31 +368,35 @@ const WarRoom: React.FC = () => {
       <Grid container spacing={3}>
         {/* AI Reasoning Stream */}
         <Grid item xs={12} md={6}>
-          <Card sx={{ 
-            bgcolor: '#151518', 
+          <Card sx={{
+            bgcolor: '#151518',
             border: '1px solid rgba(0, 230, 118, 0.2)',
             borderRadius: 3,
-            height: '600px',
+            height: 'calc(100vh - 450px)',
+            minHeight: '400px',
+            maxHeight: '700px',
             display: 'flex',
             flexDirection: 'column'
           }}>
-            <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+            <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column', p: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, flexShrink: 0 }}>
                 <Typography variant="h6" sx={{ fontWeight: 700, color: 'white' }}>
                   🤖 AI Reasoning Stream
                 </Typography>
                 <Box className="agent-pulse" sx={{ width: 8, height: 8, bgcolor: 'primary.main', borderRadius: '50%' }} />
               </Box>
               
-              <Box sx={{ 
-                flexGrow: 1, 
-                bgcolor: 'rgba(0,0,0,0.3)', 
-                borderRadius: 2, 
+              <Box sx={{
+                flex: 1,
+                bgcolor: 'rgba(0,0,0,0.3)',
+                borderRadius: 2,
                 p: 2,
                 fontFamily: 'monospace',
                 fontSize: '0.85rem',
                 overflowY: 'auto',
-                border: '1px solid rgba(0, 230, 118, 0.1)'
+                overflowX: 'hidden',
+                border: '1px solid rgba(0, 230, 118, 0.1)',
+                minHeight: 0
               }}>
                 <AnimatePresence>
                   {report && report.reasoning_stream.slice(0, reasoningIndex + 1).map((step, index) => (
@@ -357,20 +430,22 @@ const WarRoom: React.FC = () => {
 
         {/* Incident Analysis */}
         <Grid item xs={12} md={6}>
-          <Card sx={{ 
-            bgcolor: '#151518', 
+          <Card sx={{
+            bgcolor: '#151518',
             border: '1px solid rgba(255, 255, 255, 0.1)',
             borderRadius: 3,
-            height: '600px',
+            height: 'calc(100vh - 450px)',
+            minHeight: '400px',
+            maxHeight: '700px',
             display: 'flex',
             flexDirection: 'column'
           }}>
-            <CardContent sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
-              <Typography variant="h6" sx={{ fontWeight: 700, color: 'white', mb: 2 }}>
+            <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column', p: 3 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, color: 'white', mb: 2, flexShrink: 0 }}>
                 🚨 Incident Analysis
               </Typography>
               
-              <Box sx={{ flexGrow: 1, overflowY: 'auto' }}>
+              <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
                 {report && report.incident_analysis.map((incident, index) => (
                   <motion.div
                     key={incident.incident_id}
