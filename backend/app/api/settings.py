@@ -1,105 +1,137 @@
-from datetime import datetime
-from typing import Any, Dict
-
+"""
+Settings API
+Handles global application settings and API credentials
+"""
 from fastapi import APIRouter, HTTPException
+from typing import Dict, Any
+from pydantic import BaseModel
 
 from app.core.cloudant_db import cloudant_db
-from app.core.config import settings
 
 router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
 
 
-def _settings_doc_id() -> str:
-    return "global_api_settings"
+class SettingsRequest(BaseModel):
+    """Settings save request"""
+    github_token: str = None
+    slack_webhook_url: str = None
+    microsoft_client_id: str = None
+    microsoft_client_secret: str = None
 
 
-def _mask_secret(value: str) -> str:
-    if not value:
-        return ""
-    if len(value) <= 8:
-        return "*" * len(value)
-    return f"{value[:4]}{'*' * (len(value) - 8)}{value[-4:]}"
-
-
-def _build_settings_response(document: Dict[str, Any]) -> Dict[str, Any]:
-    return {
-        "github_token": document.get("github_token", ""),
-        "github_token_masked": _mask_secret(document.get("github_token", "")),
-        "github_owner": document.get("github_owner", ""),
-        "github_repo": document.get("github_repo", ""),
-        "slack_bot_token": document.get("slack_bot_token", ""),
-        "slack_bot_token_masked": _mask_secret(document.get("slack_bot_token", "")),
-        "slack_workspace_id": document.get("slack_workspace_id", ""),
-        "microsoft_client_id": document.get("microsoft_client_id", ""),
-        "microsoft_client_secret": document.get("microsoft_client_secret", ""),
-        "microsoft_client_secret_masked": _mask_secret(document.get("microsoft_client_secret", "")),
-        "microsoft_tenant_id": document.get("microsoft_tenant_id", ""),
-        "updated_at": document.get("updated_at"),
-    }
-
-
-@router.get("")
-async def get_global_settings():
+@router.post("/save")
+async def save_settings(settings: SettingsRequest):
+    """
+    Save global API settings to database
+    """
     try:
-        stored = await cloudant_db.get_document(_settings_doc_id())
-        if stored:
-            return {
-                "success": True,
-                "settings": _build_settings_response(stored),
-            }
-
-        fallback_document = {
-            "github_token": settings.GITHUB_TOKEN,
-            "github_owner": settings.GITHUB_OWNER,
-            "github_repo": settings.GITHUB_REPO,
-            "slack_bot_token": settings.SLACK_BOT_TOKEN,
-            "slack_workspace_id": settings.SLACK_WORKSPACE_ID,
-            "microsoft_client_id": settings.MICROSOFT_CLIENT_ID,
-            "microsoft_client_secret": settings.MICROSOFT_CLIENT_SECRET,
-            "microsoft_tenant_id": settings.MICROSOFT_TENANT_ID,
-            "updated_at": None,
+        # Get existing settings document
+        existing = await cloudant_db.get_document("global_api_settings")
+        
+        settings_dict = {
+            "_id": "global_api_settings",
+            "type": "global_settings"
         }
-        return {
-            "success": True,
-            "settings": _build_settings_response(fallback_document),
-        }
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to load settings: {str(exc)}")
-
-
-@router.post("")
-async def save_global_settings(payload: Dict[str, Any]):
-    try:
-        existing = await cloudant_db.get_document(_settings_doc_id())
-        timestamp = datetime.utcnow().isoformat()
-
-        document = {
-            "_id": _settings_doc_id(),
-            "type": "global_settings",
-            "github_token": payload.get("github_token", ""),
-            "github_owner": payload.get("github_owner", ""),
-            "github_repo": payload.get("github_repo", ""),
-            "slack_bot_token": payload.get("slack_bot_token", ""),
-            "slack_workspace_id": payload.get("slack_workspace_id", ""),
-            "microsoft_client_id": payload.get("microsoft_client_id", ""),
-            "microsoft_client_secret": payload.get("microsoft_client_secret", ""),
-            "microsoft_tenant_id": payload.get("microsoft_tenant_id", ""),
-            "updated_at": timestamp,
-        }
-
+        
+        # Add revision if document exists
+        if existing and isinstance(existing, dict):
+            settings_dict["_rev"] = existing.get("_rev")
+        
+        # Update with new values (only if provided)
+        if settings.github_token:
+            settings_dict["github_token"] = settings.github_token
+        elif existing:
+            settings_dict["github_token"] = existing.get("github_token")
+            
+        if settings.slack_webhook_url:
+            settings_dict["slack_webhook_url"] = settings.slack_webhook_url
+        elif existing:
+            settings_dict["slack_webhook_url"] = existing.get("slack_webhook_url")
+            
+        if settings.microsoft_client_id:
+            settings_dict["microsoft_client_id"] = settings.microsoft_client_id
+        elif existing:
+            settings_dict["microsoft_client_id"] = existing.get("microsoft_client_id")
+            
+        if settings.microsoft_client_secret:
+            settings_dict["microsoft_client_secret"] = settings.microsoft_client_secret
+        elif existing:
+            settings_dict["microsoft_client_secret"] = existing.get("microsoft_client_secret")
+        
+        # Save to database
         if existing:
-            document["_rev"] = existing["_rev"]
-            saved = await cloudant_db.update_document(_settings_doc_id(), document)
+            await cloudant_db.update_document("global_api_settings", settings_dict)
         else:
-            document["created_at"] = timestamp
-            saved = await cloudant_db.create_document(document)
-
+            await cloudant_db.create_document(settings_dict)
+        
         return {
             "success": True,
-            "message": "Global settings saved successfully",
-            "settings": _build_settings_response(saved),
+            "message": "Settings saved successfully"
         }
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to save settings: {str(exc)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save settings: {str(e)}")
+
+
+@router.get("/get")
+async def get_settings():
+    """
+    Get global API settings (tokens are masked for security)
+    """
+    try:
+        settings = await cloudant_db.get_document("global_api_settings")
+        
+        if not settings or not isinstance(settings, dict):
+            return {
+                "github_token": None,
+                "slack_webhook_url": None,
+                "microsoft_client_id": None,
+                "microsoft_client_secret": None
+            }
+        
+        # Mask sensitive tokens
+        return {
+            "github_token": "configured" if settings.get("github_token") else None,
+            "slack_webhook_url": "configured" if settings.get("slack_webhook_url") else None,
+            "microsoft_client_id": "configured" if settings.get("microsoft_client_id") else None,
+            "microsoft_client_secret": "configured" if settings.get("microsoft_client_secret") else None
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get settings: {str(e)}")
+
+
+@router.delete("/clear")
+async def clear_settings():
+    """
+    Clear all global API settings
+    """
+    try:
+        settings = await cloudant_db.get_document("global_api_settings")
+        
+        if settings and isinstance(settings, dict):
+            doc_id = settings.get("_id")
+            doc_rev = settings.get("_rev")
+            if doc_id and doc_rev:
+                await cloudant_db.delete_document(doc_id, doc_rev)
+        
+        return {
+            "success": True,
+            "message": "Settings cleared successfully"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to clear settings: {str(e)}")
+
+@router.post("/test-slack")
+async def test_slack_connection():
+    """
+    Test Slack webhook connection
+    """
+    try:
+        from app.services.slack_notifications import slack_service
+        result = await slack_service.test_connection()
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to test Slack connection: {str(e)}")
+
+
 
 # Made with Bob
