@@ -27,20 +27,35 @@ import {
   Warning as WarningIcon,
   OpenInNew as OpenInNewIcon,
   Send as SendIcon,
+  Email as EmailIcon,
+  VpnKey as VpnKeyIcon,
+  AccountCircle as AccountCircleIcon,
+  Business as BusinessIcon,
 } from '@mui/icons-material';
 
 const Settings: React.FC = () => {
   const [githubToken, setGithubToken] = useState('');
   const [slackWebhook, setSlackWebhook] = useState('');
+  const [microsoftClientId, setMicrosoftClientId] = useState('');
+  const [microsoftClientSecret, setMicrosoftClientSecret] = useState('');
+  const [microsoftTenantId, setMicrosoftTenantId] = useState('');
+  const [microsoftSenderEmail, setMicrosoftSenderEmail] = useState('');
+  const [outlookEmail, setOutlookEmail] = useState('');
+  const [outlookPassword, setOutlookPassword] = useState('');
   const [showToken, setShowToken] = useState(false);
   const [showWebhook, setShowWebhook] = useState(false);
+  const [showClientSecret, setShowClientSecret] = useState(false);
+  const [showOutlookPassword, setShowOutlookPassword] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [tokenStatus, setTokenStatus] = useState<'valid' | 'invalid' | 'unknown'>('unknown');
   const [webhookStatus, setWebhookStatus] = useState<'valid' | 'invalid' | 'unknown'>('unknown');
+  const [outlookStatus, setOutlookStatus] = useState<'valid' | 'invalid' | 'unknown'>('unknown');
   const [testingSlack, setTestingSlack] = useState(false);
   const [slackTestResult, setSlackTestResult] = useState('');
+  const [testingOutlook, setTestingOutlook] = useState(false);
+  const [outlookTestResult, setOutlookTestResult] = useState('');
 
   useEffect(() => {
     loadSettings();
@@ -68,6 +83,49 @@ const Settings: React.FC = () => {
           setSlackWebhook('');
           setWebhookStatus('unknown');
         }
+
+        if (data.microsoft_client_id === 'configured') {
+          setMicrosoftClientId('••••••••••••••••');
+        } else {
+          setMicrosoftClientId('');
+        }
+
+        if (data.microsoft_client_secret === 'configured') {
+          setMicrosoftClientSecret('••••••••••••••••');
+        } else {
+          setMicrosoftClientSecret('');
+        }
+
+        if (data.microsoft_tenant_id === 'configured') {
+          setMicrosoftTenantId('••••••••••••••••');
+        } else {
+          setMicrosoftTenantId('');
+        }
+
+        if (data.microsoft_sender_email) {
+          setMicrosoftSenderEmail(data.microsoft_sender_email);
+        } else {
+          setMicrosoftSenderEmail('');
+        }
+
+        if (data.outlook_email) {
+          setOutlookEmail(data.outlook_email);
+          setOutlookStatus('valid');
+        } else {
+          setOutlookEmail('');
+        }
+
+        if (data.outlook_password === 'configured') {
+          setOutlookPassword('••••••••••••••••');
+          if (data.outlook_email) {
+            setOutlookStatus('valid');
+          }
+        } else {
+          setOutlookPassword('');
+          if (!data.outlook_email) {
+            setOutlookStatus('unknown');
+          }
+        }
       }
     } catch (error) {
       console.error('Error loading settings:', error);
@@ -91,6 +149,30 @@ const Settings: React.FC = () => {
         payload.slack_webhook_url = slackWebhook;
       }
 
+      if (microsoftClientId && microsoftClientId !== '••••••••••••••••') {
+        payload.microsoft_client_id = microsoftClientId;
+      }
+
+      if (microsoftClientSecret && microsoftClientSecret !== '••••••••••••••••') {
+        payload.microsoft_client_secret = microsoftClientSecret;
+      }
+
+      if (microsoftTenantId && microsoftTenantId !== '••••••••••••••••') {
+        payload.microsoft_tenant_id = microsoftTenantId;
+      }
+
+      if (microsoftSenderEmail) {
+        payload.microsoft_sender_email = microsoftSenderEmail;
+      }
+
+      if (outlookEmail) {
+        payload.outlook_email = outlookEmail;
+      }
+
+      if (outlookPassword && outlookPassword !== '••••••••••••••••') {
+        payload.outlook_password = outlookPassword;
+      }
+
       const response = await fetch('http://localhost:8000/api/v1/settings/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -102,6 +184,12 @@ const Settings: React.FC = () => {
         setTokenStatus('valid');
         if (slackWebhook && slackWebhook !== '••••••••••••••••') {
           setWebhookStatus('valid');
+        }
+        if (microsoftClientId && microsoftClientId !== '••••••••••••••••') {
+          // Keep existing status
+        }
+        if (outlookEmail && outlookPassword && outlookPassword !== '••••••••••••••••') {
+          setOutlookStatus('valid');
         }
         // Reload to get masked values
         await loadSettings();
@@ -139,6 +227,31 @@ const Settings: React.FC = () => {
     } finally {
       setTestingSlack(false);
       setTimeout(() => setSlackTestResult(''), 5000);
+    }
+  };
+
+  const handleTestOutlook = async () => {
+    setTestingOutlook(true);
+    setOutlookTestResult('');
+
+    try {
+      const response = await fetch('http://localhost:8000/api/v1/settings/test-outlook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setOutlookTestResult('✅ Test email sent successfully! Check your inbox.');
+      } else {
+        setOutlookTestResult(`❌ ${data.message}`);
+      }
+    } catch (error) {
+      setOutlookTestResult('❌ Network error: Could not test Outlook connection');
+    } finally {
+      setTestingOutlook(false);
+      setTimeout(() => setOutlookTestResult(''), 5000);
     }
   };
 
@@ -491,6 +604,213 @@ const Settings: React.FC = () => {
                   </ListItemIcon>
                   <ListItemText
                     primary="Daily Summaries"
+                    secondary="SOW monitoring reports"
+                  />
+                </ListItem>
+              </List>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Gmail Configuration */}
+        <Grid item xs={12} md={8}>
+          <Card>
+            <CardContent>
+              <Box display="flex" alignItems="center" gap={1} mb={2}>
+                <EmailIcon sx={{ color: '#EA4335' }} />
+                <Typography variant="h6">Gmail Integration</Typography>
+              </Box>
+
+              <Alert severity="info" sx={{ mb: 2 }}>
+                Simple SMTP setup using Gmail. Works with App Passwords!
+              </Alert>
+
+              <TextField
+                fullWidth
+                label="Gmail Address"
+                type="email"
+                value={outlookEmail}
+                onChange={(e) => setOutlookEmail(e.target.value)}
+                placeholder="your-email@gmail.com"
+                helperText="Your Gmail email address"
+                sx={{ mb: 2 }}
+              />
+
+              <TextField
+                fullWidth
+                label="Gmail App Password"
+                type={showOutlookPassword ? 'text' : 'password'}
+                value={outlookPassword}
+                onChange={(e) => setOutlookPassword(e.target.value)}
+                placeholder={outlookStatus === 'valid' ? 'App Password is configured' : 'Enter 16-character app password'}
+                helperText="Required: Use App Password from Google Account settings (not your regular password)"
+                sx={{ mb: 2 }}
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        onClick={() => setShowOutlookPassword(!showOutlookPassword)}
+                        edge="end"
+                        title={showOutlookPassword ? "Hide password" : "Show password"}
+                      >
+                        {showOutlookPassword ? <VisibilityOff /> : <Visibility />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+              />
+
+              <Box display="flex" alignItems="center" gap={1} mb={2}>
+                {outlookStatus === 'valid' && (
+                  <Alert severity="success" icon={<CheckCircleIcon />} sx={{ flex: 1 }}>
+                    Gmail configured
+                  </Alert>
+                )}
+                {outlookStatus === 'unknown' && (
+                  <Alert severity="warning" icon={<WarningIcon />} sx={{ flex: 1 }}>
+                    No Gmail configuration
+                  </Alert>
+                )}
+              </Box>
+
+              {outlookTestResult && (
+                <Alert severity={outlookTestResult.includes('✅') ? 'success' : 'error'} sx={{ mb: 2 }}>
+                  {outlookTestResult}
+                </Alert>
+              )}
+
+              <Box display="flex" gap={2}>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<SaveIcon />}
+                  onClick={handleSave}
+                  disabled={saving}
+                  sx={{ flex: 1 }}
+                >
+                  {saving ? 'Saving...' : 'Save Settings'}
+                </Button>
+                <Button
+                  variant="outlined"
+                  sx={{ flex: 1, borderColor: '#EA4335', color: '#EA4335' }}
+                  startIcon={<SendIcon />}
+                  onClick={handleTestOutlook}
+                  disabled={testingOutlook || outlookStatus === 'unknown'}
+                >
+                  {testingOutlook ? 'Testing...' : 'Test Gmail'}
+                </Button>
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+
+        {/* Gmail Instructions */}
+        <Grid item xs={12} md={4}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                How to Get Gmail App Password
+              </Typography>
+              <Divider sx={{ my: 2 }} />
+              <List dense>
+                <ListItem>
+                  <ListItemIcon>
+                    <Typography variant="body2" sx={{ color: '#EA4335' }}>1</Typography>
+                  </ListItemIcon>
+                  <ListItemText
+                    primary="Go to Google Account"
+                    secondary={
+                      <Link
+                        href="https://myaccount.google.com/security"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}
+                      >
+                        Open Security Settings <OpenInNewIcon fontSize="small" />
+                      </Link>
+                    }
+                  />
+                </ListItem>
+                <ListItem>
+                  <ListItemIcon>
+                    <Typography variant="body2" sx={{ color: '#EA4335' }}>2</Typography>
+                  </ListItemIcon>
+                  <ListItemText
+                    primary="Enable 2-Step Verification"
+                    secondary="Required for App Passwords"
+                  />
+                </ListItem>
+                <ListItem>
+                  <ListItemIcon>
+                    <Typography variant="body2" sx={{ color: '#EA4335' }}>3</Typography>
+                  </ListItemIcon>
+                  <ListItemText
+                    primary="Search 'App passwords'"
+                    secondary="In Google Account settings"
+                  />
+                </ListItem>
+                <ListItem>
+                  <ListItemIcon>
+                    <Typography variant="body2" sx={{ color: '#EA4335' }}>4</Typography>
+                  </ListItemIcon>
+                  <ListItemText
+                    primary="Select 'Mail' and 'Other'"
+                    secondary="Name it 'SOW Sentinel'"
+                  />
+                </ListItem>
+                <ListItem>
+                  <ListItemIcon>
+                    <Typography variant="body2" sx={{ color: '#EA4335' }}>5</Typography>
+                  </ListItemIcon>
+                  <ListItemText
+                    primary="Copy 16-character password"
+                    secondary="Paste above (ignore spaces)"
+                  />
+                </ListItem>
+              </List>
+            </CardContent>
+          </Card>
+
+          <Card sx={{ mt: 2 }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                Email Notification Types
+              </Typography>
+              <Divider sx={{ my: 2 }} />
+              <List dense>
+                <ListItem>
+                  <ListItemIcon>
+                    <CheckCircleIcon sx={{ color: '#f44336' }} fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary="SLA Breach Alerts"
+                    secondary="Critical SLA violations"
+                  />
+                </ListItem>
+                <ListItem>
+                  <ListItemIcon>
+                    <CheckCircleIcon sx={{ color: '#ff9800' }} fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary="Penalty Warnings"
+                    secondary="High penalty exposure"
+                  />
+                </ListItem>
+                <ListItem>
+                  <ListItemIcon>
+                    <CheckCircleIcon sx={{ color: '#2196f3' }} fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary="Milestone Reminders"
+                    secondary="Upcoming deliverables"
+                  />
+                </ListItem>
+                <ListItem>
+                  <ListItemIcon>
+                    <CheckCircleIcon sx={{ color: '#4caf50' }} fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary="Weekly Summaries"
                     secondary="SOW monitoring reports"
                   />
                 </ListItem>
