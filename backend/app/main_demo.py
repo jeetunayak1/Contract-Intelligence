@@ -17,6 +17,7 @@ from datetime import datetime
 from app.api.sow import router as sow_router
 from app.api.integrations import router as integrations_router
 from app.api.settings import router as settings_router
+from app.api.contract_intelligence import router as contract_intelligence_router
 
 app = FastAPI(
     title="SOW Sentinel - Demo Mode",
@@ -28,6 +29,7 @@ app = FastAPI(
 app.include_router(sow_router, prefix="/api/v1/sow")
 app.include_router(integrations_router)
 app.include_router(settings_router)
+app.include_router(contract_intelligence_router, prefix="/api/v1/contracts", tags=["Contract Intelligence"])
 
 # CORS middleware
 app.add_middleware(

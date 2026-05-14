@@ -1,0 +1,218 @@
+SERVICE LEVEL AGREEMENT
+STATEMENT OF WORK
+
+Contract ID: SOW-2024-001
+Effective Date: January 1, 2024
+Contract Period: 3 Years (2024-2026)
+Contract Value: $1,200,000 USD
+
+PARTIES:
+Client: Acme Corporation
+Provider: TechServices Inc
+
+1. INCIDENT RESPONSE SERVICE LEVEL AGREEMENTS
+
+1.1 Priority 1 (P1) - Critical Incidents
+- Acknowledgment: 15 minutes
+- Workaround: 2 hours
+- Resolution: 4 hours
+- Root Cause Analysis: 24 hours
+- Availability: 24x7x365
+
+1.2 Priority 2 (P2) - High Severity Incidents
+- Acknowledgment: 30 minutes
+- Workaround: 4 hours
+- Resolution: 8 hours
+- Root Cause Analysis: 48 hours
+- Availability: 24x7x365
+
+1.3 Priority 3 (P3) - Medium Severity Incidents
+- Acknowledgment: 1 hour
+- Workaround: 8 hours
+- Resolution: 24 hours
+- Root Cause Analysis: 72 hours
+- Availability: Business Hours (9 AM - 6 PM EST, Monday-Friday)
+
+1.4 Priority 4 (P4) - Low Severity Incidents
+- Acknowledgment: 4 hours
+- Resolution: 72 hours
+- Availability: Business Hours (9 AM - 6 PM EST, Monday-Friday)
+
+2. AVAILABILITY SERVICE LEVEL AGREEMENTS
+
+2.1 Production Environment
+- Target Uptime: 99.9%
+- Maximum Downtime: 43.8 minutes per month
+- Measurement Tool: Datadog
+- Measurement Period: Monthly
+
+2.2 Staging Environment
+- Target Uptime: 99.5%
+- Maximum Downtime: 219 minutes per month
+- Measurement Tool: Datadog
+- Measurement Period: Monthly
+
+3. QUALITY KEY PERFORMANCE INDICATORS
+
+3.1 Code Quality
+- Unit Test Coverage: 80% minimum
+- Measurement: Per Sprint
+
+3.2 Code Review
+- Code Review Completion: 100%
+- Measurement: Per Pull Request
+
+3.3 Security
+- Security Scan Pass Rate: 100%
+- Measurement: Per Deployment
+
+4. SERVICE CREDITS AND FINANCIAL PENALTIES
+
+4.1 Incident SLA Breaches
+- P1 Resolution exceeds 4 hours: 2% service credit per incident
+- P2 Resolution exceeds 8 hours: 1% service credit per incident
+- Monthly Cap: 10% of monthly fees
+
+4.2 Availability SLA Breaches
+- Monthly uptime below 99.9%: 5% service credit per percentage point below target
+- Monthly Cap: 10% of monthly fees
+
+4.3 Credit Calculation
+- Credits calculated per incident or per month
+- Credits applied to next month's invoice
+- Credits do not accumulate beyond monthly cap
+
+5. LIABILITY EXCLUSIONS
+
+The Provider shall not be liable for service failures or SLA breaches caused by:
+
+5.1 Client Infrastructure
+- Failures in client-provided infrastructure
+- Client network connectivity issues
+- Client hardware or software defects
+
+5.2 Third-Party Services
+- Third-party cloud provider outages (AWS, Azure, GCP)
+- Third-party API or service failures
+- DNS or CDN provider issues
+
+5.3 Force Majeure
+- Natural disasters
+- Acts of war or terrorism
+- Government actions or regulations
+- Pandemics or public health emergencies
+
+5.4 Client Actions
+- Unauthorized system modifications
+- Client-provided code defects
+- Failure to follow documented procedures
+- Delayed approvals or responses
+
+5.5 Security Events
+- DDoS attacks exceeding 100 Gbps
+- Zero-day vulnerabilities
+- State-sponsored cyber attacks
+
+6. GOVERNANCE AND MEETING REQUIREMENTS
+
+6.1 Weekly Operations Review
+- Frequency: Weekly (Every Monday, 10 AM EST)
+- Participants: Client PM, Provider PM, Tech Lead
+- Deliverables: Status Report, Risk Register, Action Items
+
+6.2 Monthly Business Review
+- Frequency: Monthly (First Tuesday of each month)
+- Participants: Client Director, Provider Director, Account Manager
+- Deliverables: Performance Dashboard, Financial Summary, Roadmap Updates
+
+6.3 Quarterly Strategic Review
+- Frequency: Quarterly (January, April, July, October)
+- Participants: Executive Sponsors (C-Level)
+- Deliverables: Strategic Roadmap, Budget Review, Contract Performance
+
+7. ESCALATION MATRIX
+
+7.1 Level 1 (L1) - Operations Manager
+- Trigger: Operational issue not resolved within SLA
+- Response SLA: Same Business Day
+- Contact: operations@techservices.com
+
+7.2 Level 2 (L2) - Service Delivery Manager
+- Trigger: L1 escalation not resolved within 24 hours
+- Response SLA: 4 hours
+- Contact: sdm@techservices.com
+
+7.3 Level 3 (L3) - VP of Operations
+- Trigger: Critical business impact or L2 unresolved
+- Response SLA: 2 hours
+- Contact: vp-ops@techservices.com
+
+7.4 Level 4 (L4) - C-Level Executive
+- Trigger: Executive escalation required
+- Response SLA: 1 hour
+- Contact: ceo@techservices.com
+
+8. PAYMENT AND CONTRACT TERMS
+
+8.1 Payment Terms
+- Invoice Frequency: Monthly
+- Payment Terms: Net 30 days
+- Late Payment Fee: 1.5% per month
+
+8.2 Contract Renewal
+- Renewal Notice: 90 days prior to expiration
+- Auto-renewal: Yes, unless terminated
+
+8.3 Termination
+- Termination Notice: 180 days
+- Early Termination Fee: 25% of remaining contract value
+
+9. REPORTING AND METRICS
+
+9.1 Monthly Reports
+- Incident Summary by Priority
+- SLA Compliance Metrics
+- Availability Statistics
+- Service Credit Calculations
+
+9.2 Quarterly Reports
+- Trend Analysis
+- Capacity Planning
+- Risk Assessment
+- Improvement Recommendations
+
+10. DEFINITIONS
+
+10.1 Business Hours
+- Monday through Friday, 9:00 AM to 6:00 PM Eastern Standard Time
+- Excluding US Federal Holidays
+
+10.2 Incident Priorities
+- P1 (Critical): Complete system outage, data loss, security breach
+- P2 (High): Major functionality impaired, significant user impact
+- P3 (Medium): Minor functionality impaired, workaround available
+- P4 (Low): Cosmetic issues, feature requests, documentation
+
+10.3 Acknowledgment
+- Initial response confirming receipt and assignment of incident
+
+10.4 Workaround
+- Temporary solution allowing business operations to continue
+
+10.5 Resolution
+- Permanent fix implemented and verified in production
+
+10.6 Root Cause Analysis (RCA)
+- Detailed investigation report identifying cause and preventive measures
+
+SIGNATURES:
+
+Client: Acme Corporation
+Authorized Signatory: John Smith, CTO
+Date: January 1, 2024
+
+Provider: TechServices Inc
+Authorized Signatory: Jane Doe, CEO
+Date: January 1, 2024
+
+END OF DOCUMENT

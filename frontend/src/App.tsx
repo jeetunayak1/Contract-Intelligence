@@ -1,12 +1,13 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { ThemeProvider, createTheme, CssBaseline, Box, AppBar, Toolbar, Typography, Drawer, List, ListItem, ListItemIcon, ListItemText, ListItemButton } from '@mui/material';
-import { Dashboard as DashboardIcon, Description, Assessment, Warning, Notifications, Analytics as AnalyticsIcon, Security as SecurityIcon, Settings as SettingsIcon } from '@mui/icons-material';
+import { Dashboard as DashboardIcon, Description, Assessment, Warning, Notifications, Analytics as AnalyticsIcon, Security as SecurityIcon, Settings as SettingsIcon, Gavel } from '@mui/icons-material';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 import Dashboard from './pages/Dashboard';
 import TransformationHub from './pages/TransformationHub';
+import ContractIntelligence from './pages/ContractIntelligence';
 
 const theme = createTheme({
   palette: {
@@ -76,6 +77,7 @@ const drawerWidth = 240;
 const menuItems = [
   { text: 'Command Center', icon: <DashboardIcon />, path: '/' },
   { text: 'Transformation Hub', icon: <Description />, path: '/sows' },
+  { text: 'Contract Intelligence', icon: <Gavel />, path: '/contracts' },
 ];
 
 function App() {
@@ -135,6 +137,7 @@ function App() {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/sows" element={<TransformationHub />} />
+              <Route path="/contracts" element={<ContractIntelligence />} />
             </Routes>
           </Box>
         </Box>
