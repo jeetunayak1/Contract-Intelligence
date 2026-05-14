@@ -51,13 +51,22 @@ const Settings: React.FC = () => {
       const response = await fetch('http://localhost:8000/api/v1/settings/get');
       if (response.ok) {
         const data = await response.json();
-        if (data.github_token) {
+        console.log('Loaded settings:', data); // Debug log
+
+        if (data.github_token === 'configured') {
           setGithubToken('••••••••••••••••');
           setTokenStatus('valid');
+        } else {
+          setGithubToken('');
+          setTokenStatus('unknown');
         }
-        if (data.slack_webhook_url) {
+
+        if (data.slack_webhook_url === 'configured') {
           setSlackWebhook('••••••••••••••••');
           setWebhookStatus('valid');
+        } else {
+          setSlackWebhook('');
+          setWebhookStatus('unknown');
         }
       }
     } catch (error) {
@@ -71,13 +80,21 @@ const Settings: React.FC = () => {
     setSaveError('');
 
     try {
+      // Only send values that have been changed (not masked)
+      const payload: any = {};
+
+      if (githubToken && githubToken !== '••••••••••••••••') {
+        payload.github_token = githubToken;
+      }
+
+      if (slackWebhook && slackWebhook !== '••••••••••••••••') {
+        payload.slack_webhook_url = slackWebhook;
+      }
+
       const response = await fetch('http://localhost:8000/api/v1/settings/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          github_token: githubToken,
-          slack_webhook_url: slackWebhook,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (response.ok) {
@@ -86,6 +103,8 @@ const Settings: React.FC = () => {
         if (slackWebhook && slackWebhook !== '••••••••••••••••') {
           setWebhookStatus('valid');
         }
+        // Reload to get masked values
+        await loadSettings();
         setTimeout(() => setSaveSuccess(false), 3000);
       } else {
         const error = await response.json();
@@ -163,7 +182,8 @@ const Settings: React.FC = () => {
                 type={showToken ? 'text' : 'password'}
                 value={githubToken}
                 onChange={(e) => setGithubToken(e.target.value)}
-                placeholder="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                placeholder={tokenStatus === 'valid' ? 'Token is configured (click to enter new token)' : 'ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'}
+                helperText={tokenStatus === 'valid' ? 'Token is securely stored. Click the field to enter a new token.' : 'Enter your GitHub Personal Access Token'}
                 sx={{ mb: 2 }}
                 InputProps={{
                   endAdornment: (
@@ -171,6 +191,7 @@ const Settings: React.FC = () => {
                       <IconButton
                         onClick={() => setShowToken(!showToken)}
                         edge="end"
+                        title={showToken ? "Hide token" : "Show token"}
                       >
                         {showToken ? <VisibilityOff /> : <Visibility />}
                       </IconButton>
@@ -318,7 +339,8 @@ const Settings: React.FC = () => {
                 type={showWebhook ? 'text' : 'password'}
                 value={slackWebhook}
                 onChange={(e) => setSlackWebhook(e.target.value)}
-                placeholder="https://hooks.slack.com/services/..."
+                placeholder={webhookStatus === 'valid' ? 'Webhook is configured (click to enter new URL)' : 'https://hooks.slack.com/services/...'}
+                helperText={webhookStatus === 'valid' ? 'Webhook is securely stored. Click the field to enter a new URL.' : 'Enter your Slack Incoming Webhook URL'}
                 sx={{ mb: 2 }}
                 InputProps={{
                   endAdornment: (
@@ -326,6 +348,7 @@ const Settings: React.FC = () => {
                       <IconButton
                         onClick={() => setShowWebhook(!showWebhook)}
                         edge="end"
+                        title={showWebhook ? "Hide webhook" : "Show webhook"}
                       >
                         {showWebhook ? <VisibilityOff /> : <Visibility />}
                       </IconButton>

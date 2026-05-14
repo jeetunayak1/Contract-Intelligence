@@ -54,6 +54,11 @@ class SlackNotificationService:
             return False
         
         try:
+            # Validate webhook URL format
+            if not webhook_url.startswith('https://hooks.slack.com/'):
+                logger.error(f"Invalid Slack webhook URL format. Must start with https://hooks.slack.com/")
+                return False
+            
             payload = {
                 "attachments": [{
                     "color": color,
@@ -74,8 +79,11 @@ class SlackNotificationService:
                 logger.error(f"Slack notification failed: {response.status_code} - {response.text}")
                 return False
                 
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to send Slack notification (Request Error): {type(e).__name__}: {str(e)}")
+            return False
         except Exception as e:
-            logger.error(f"Failed to send Slack notification: {e}")
+            logger.error(f"Failed to send Slack notification (Unexpected Error): {type(e).__name__}: {str(e)}")
             return False
     
     async def send_sla_breach_alert(
