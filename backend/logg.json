@@ -1,0 +1,49 @@
+{
+    "cluster_name": "vcs-0u-workload",
+    "name": "mariprnsxt",
+    "location": "sjc04",
+    "sl_pod_name": "bcr01a.sjc04",
+    "quantity": 2,
+    "template_id": "1",
+    "uplink_speed": "10GB",
+    "host_prefix": "host-4n",
+    "test_hardware": false,
+    "customized_hardware": {
+        "server": "INTEL_INTEL_XEON_6416_UEFI_BOOT_MODE_2_20",
+        "ram": "1_TB_RAM_DDR5"
+    },
+    "shared_storage": [
+        {
+            "nfs_type": "nfs",
+            "iops": "READHEAVY_TIER",
+            "file": "FILE_STORAGE_2",
+            "quantity": 1,
+            "type": "STORAGE_AS_A_SERVICE",
+            "volume": 1000,
+            "size": "STORAGE_SPACE_FOR_2_IOPS_PER_GB"
+        }
+    ],
+    "private_only": false,
+    "networking": {
+        "public_vlan": {
+            "id": 3539844,
+            "podname": "sjc04.pod01"
+        },
+        "private_vlan": {
+            "id": 3362517,
+            "podname": "sjc04.pod01"
+        },
+        "additional_private_vlan": {
+            "id": 3360969,
+            "podname": "sjc04.pod01"
+        }
+    },
+    "vsphere_version": "8.0",
+    "email_attachments": [
+        {
+            "email_attachment_file_name": "order_summary.pdf",
+            "email_attachment_language": "en",
+            ""
+        }
+    ]
+}

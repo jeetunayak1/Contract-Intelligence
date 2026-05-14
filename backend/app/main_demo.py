@@ -18,6 +18,7 @@ from app.api.sow import router as sow_router
 from app.api.integrations import router as integrations_router
 from app.api.settings import router as settings_router
 from app.api.contract_intelligence import router as contract_intelligence_router
+from app.api.compliance import router as compliance_router
 
 app = FastAPI(
     title="SOW Sentinel - Demo Mode",
@@ -30,6 +31,7 @@ app.include_router(sow_router, prefix="/api/v1/sow")
 app.include_router(integrations_router)
 app.include_router(settings_router)
 app.include_router(contract_intelligence_router, prefix="/api/v1/contracts", tags=["Contract Intelligence"])
+app.include_router(compliance_router, prefix="/api/v1/compliance", tags=["Compliance & Risk"])
 
 # CORS middleware
 app.add_middleware(

@@ -91,6 +91,14 @@ class ContractFirestoreService:
             contracts = contracts[:limit]
         return contracts
     
+    async def get_contract_by_id(self, contract_id: str) -> Optional[Dict[str, Any]]:
+        """Get contract by ID (alias for get_contract)"""
+        return await self.get_contract(contract_id)
+    
+    async def get_all_contracts(self) -> List[Dict[str, Any]]:
+        """Get all contracts (alias for list_contracts)"""
+        return await self.list_contracts()
+    
     async def delete_contract(self, contract_id: str) -> bool:
         """Delete contract"""
         if self.db:
