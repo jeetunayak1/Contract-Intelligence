@@ -15,10 +15,6 @@ class SettingsRequest(BaseModel):
     """Settings save request"""
     github_token: str = None
     slack_webhook_url: str = None
-    microsoft_client_id: str = None
-    microsoft_client_secret: str = None
-    microsoft_tenant_id: str = None
-    microsoft_sender_email: str = None
     outlook_email: str = None
     outlook_password: str = None
 
@@ -51,26 +47,6 @@ async def save_settings(settings: SettingsRequest):
             settings_dict["slack_webhook_url"] = settings.slack_webhook_url
         elif existing:
             settings_dict["slack_webhook_url"] = existing.get("slack_webhook_url")
-            
-        if settings.microsoft_client_id:
-            settings_dict["microsoft_client_id"] = settings.microsoft_client_id
-        elif existing:
-            settings_dict["microsoft_client_id"] = existing.get("microsoft_client_id")
-            
-        if settings.microsoft_client_secret:
-            settings_dict["microsoft_client_secret"] = settings.microsoft_client_secret
-        elif existing:
-            settings_dict["microsoft_client_secret"] = existing.get("microsoft_client_secret")
-            
-        if settings.microsoft_tenant_id:
-            settings_dict["microsoft_tenant_id"] = settings.microsoft_tenant_id
-        elif existing:
-            settings_dict["microsoft_tenant_id"] = existing.get("microsoft_tenant_id")
-            
-        if settings.microsoft_sender_email:
-            settings_dict["microsoft_sender_email"] = settings.microsoft_sender_email
-        elif existing:
-            settings_dict["microsoft_sender_email"] = existing.get("microsoft_sender_email")
             
         if settings.outlook_email:
             settings_dict["outlook_email"] = settings.outlook_email
@@ -120,10 +96,6 @@ async def get_settings():
         return {
             "github_token": "configured" if settings.get("github_token") else None,
             "slack_webhook_url": "configured" if settings.get("slack_webhook_url") else None,
-            "microsoft_client_id": "configured" if settings.get("microsoft_client_id") else None,
-            "microsoft_client_secret": "configured" if settings.get("microsoft_client_secret") else None,
-            "microsoft_tenant_id": "configured" if settings.get("microsoft_tenant_id") else None,
-            "microsoft_sender_email": settings.get("microsoft_sender_email") if settings.get("microsoft_sender_email") else None,
             "outlook_email": settings.get("outlook_email") if settings.get("outlook_email") else None,
             "outlook_password": "configured" if settings.get("outlook_password") else None
         }

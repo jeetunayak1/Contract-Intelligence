@@ -22,7 +22,7 @@ class OutlookSMTPService:
         self.smtp_port = 587
     
     async def _get_credentials(self) -> Dict[str, Optional[str]]:
-        """Get Outlook SMTP credentials from settings"""
+        """Get Gmail SMTP credentials from settings"""
         try:
             settings = await cloudant_db.get_document("global_api_settings")
             if settings and isinstance(settings, dict):
@@ -31,7 +31,7 @@ class OutlookSMTPService:
                     "password": settings.get("outlook_password")
                 }
         except Exception as e:
-            logger.error(f"Failed to get Outlook credentials: {e}")
+            logger.error(f"Failed to get Gmail credentials: {e}")
         return {"email": None, "password": None}
     
     def _build_html_email(
@@ -88,7 +88,7 @@ class OutlookSMTPService:
         importance: str = "normal"
     ) -> bool:
         """
-        Send an email via Outlook SMTP
+        Send an email via Gmail SMTP
         
         Args:
             to_emails: List of recipient email addresses
@@ -104,7 +104,7 @@ class OutlookSMTPService:
         password = credentials.get("password")
         
         if not email or not password:
-            logger.warning("Outlook SMTP credentials not configured")
+            logger.warning("Gmail SMTP credentials not configured")
             return False
         
         try:
@@ -134,7 +134,7 @@ class OutlookSMTPService:
             
         except smtplib.SMTPAuthenticationError as e:
             logger.error(f"SMTP Authentication failed: {str(e)}")
-            logger.error("Please check your email and password. For Outlook.com, you may need an App Password.")
+            logger.error("Please check your email and App Password. Make sure you're using a Gmail App Password, not your regular password.")
             return False
         except smtplib.SMTPException as e:
             logger.error(f"SMTP error: {type(e).__name__}: {str(e)}")
@@ -275,7 +275,7 @@ class OutlookSMTPService:
         )
     
     async def test_connection(self) -> Dict[str, Any]:
-        """Test Outlook SMTP connection"""
+        """Test Gmail SMTP connection"""
         credentials = await self._get_credentials()
         email = credentials.get("email")
         password = credentials.get("password")
@@ -283,7 +283,7 @@ class OutlookSMTPService:
         if not email or not password:
             return {
                 "success": False,
-                "message": "Outlook email and password not configured. Please enter your credentials in Settings."
+                "message": "Gmail email and App Password not configured. Please enter your credentials in Settings."
             }
         
         # Send test email to self
@@ -292,10 +292,10 @@ class OutlookSMTPService:
             subject="✅ Test Email - SOW Sentinel",
             body_html=self._build_html_email(
                 title="Test Email Successful",
-                message="Outlook SMTP integration is working correctly! This is a test email from SOW Sentinel.",
+                message="Gmail SMTP integration is working correctly! This is a test email from SOW Sentinel.",
                 fields=[
                     {"title": "Status", "value": "✅ Connected"},
-                    {"title": "Method", "value": "Outlook.com SMTP"},
+                    {"title": "Method", "value": "Gmail SMTP"},
                     {"title": "Test Time", "value": datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}
                 ],
                 color="#4caf50"
@@ -311,7 +311,7 @@ class OutlookSMTPService:
         else:
             return {
                 "success": False,
-                "message": "Failed to send test email. Please check your credentials. For Outlook.com, you may need to use an App Password instead of your regular password."
+                "message": "Failed to send test email. Please check your Gmail address and App Password. Make sure you're using an App Password from Google Account settings, not your regular Gmail password."
             }
 
 
