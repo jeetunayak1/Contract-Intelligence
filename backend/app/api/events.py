@@ -345,6 +345,68 @@ async def trigger_manual_analysis(
         logger.error(f"Failed to trigger analysis: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.get("/incidents/{incident_id}/compliance-report")
+async def get_incident_compliance_report(incident_id: str):
+    """
+    Get full compliance report for an incident
+    Returns detailed SLA analysis, breach detection, and financial exposure
+    """
+    try:
+        event_service = get_firebase_event_service()
+        report = await event_service.get_compliance_report(incident_id)
+        
+        if not report:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Compliance report not found for incident {incident_id}"
+            )
+        
+        return report
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get compliance report: {e}", exc_info=True)
+
+@router.get("/github/raw-issues")
+async def get_raw_github_issues():
+    """
+    Get raw GitHub issues without analysis
+    Used for "All Incidents" tab to show unprocessed issues
+    """
+    try:
+        from app.services.github_service import get_github_service
+        
+        github_service = get_github_service()
+        issues = github_service.list_open_issues()
+        
+        # Convert to simple format
+        raw_issues = []
+        for issue in issues:
+            raw_issues.append({
+                'issue_number': issue.get('number'),
+                'title': issue.get('title'),
+                'body': issue.get('body', ''),
+                'labels': issue.get('labels', []),
+                'state': issue.get('state', 'open'),
+                'created_at': issue.get('created_at'),
+                'updated_at': issue.get('updated_at'),
+                'html_url': issue.get('html_url')
+            })
+        
+        return {
+            'success': True,
+            'total': len(raw_issues),
+            'issues': raw_issues
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to fetch raw GitHub issues: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 
 @router.post("/github/sync-existing-issues")
 async def sync_existing_github_issues(background_tasks: BackgroundTasks):

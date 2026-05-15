@@ -407,13 +407,59 @@ class ComplianceCrew:
                 task="SLA Breach Detection"
             )
             
-            report = await compliance_agent.analyze_compliance(contract, monthly_fee)
+            # Convert incident to dict for analysis
+            from datetime import datetime
+            
+            # Convert created_at to string if it's a datetime object
+            created_at_str = incident.created_at
+            if isinstance(created_at_str, datetime):
+                created_at_str = created_at_str.isoformat()
+            
+            incident_dict = {
+                'incident_id': incident.incident_id,
+                'title': incident.title,
+                'priority': incident.priority,
+                'service': incident.service,
+                'status': incident.status,
+                'created_at': created_at_str,
+                'description': incident.description or '',
+                'affected_users': incident.affected_users or 0,
+                'duration_hours': 0.5,  # Assume 30 minutes for new incidents
+                'root_cause': 'under_investigation'
+            }
+            
+            report = await compliance_agent.analyze_single_incident(incident_dict, contract, monthly_fee)
+            
+            # Save full compliance report to Firestore
+            try:
+                report_dict = report.model_dump(mode='json')
+                await self.event_service.save_compliance_report(
+                    incident_id=incident.incident_id,
+                    report_data=report_dict
+                )
+                await self._add_reasoning_log(
+                    incident_id=incident.incident_id,
+                    crew_execution_id=crew_execution_id,
+                    level=ReasoningLogLevel.INFO,
+                    message=f"💾 Compliance report saved to database",
+                    agent="System",
+                    task="Report Storage"
+                )
+            except Exception as e:
+                await self._add_reasoning_log(
+                    incident_id=incident.incident_id,
+                    crew_execution_id=crew_execution_id,
+                    level=ReasoningLogLevel.WARNING,
+                    message=f"⚠️  Failed to save compliance report: {str(e)}",
+                    agent="System",
+                    task="Report Storage"
+                )
             
             await self._add_reasoning_log(
                 incident_id=incident.incident_id,
                 crew_execution_id=crew_execution_id,
                 level=ReasoningLogLevel.INFO,
-                message=f"✅ Compliance analysis complete - Analyzed {len(report.incident_analysis)} incidents",
+                message=f"✅ Compliance analysis complete - Status: {report.overall_status.value}, Breaches: {report.breached_incidents}",
                 agent="Compliance Agent",
                 task="SLA Breach Detection"
             )

@@ -63,13 +63,132 @@ class ComplianceAgent:
         self.reasoning_stream.append(step)
         logger.info(f"[REASONING] {message}")
     
+    async def analyze_single_incident(
+        self,
+        incident_data: Dict[str, Any],
+        contract_data: ExtractedContract,
+        monthly_fee: float = 100000.0
+    ) -> ComplianceReport:
+        """
+        Analyze a single incident against contract SLAs
+        
+        Args:
+            incident_data: Single incident to analyze (from GitHub/PagerDuty)
+            contract_data: Extracted contract with SLA obligations
+            monthly_fee: Monthly contract value for financial calculations
+            
+        Returns:
+            Compliance report for the single incident
+        """
+        self.reasoning_stream = []
+        report_id = f"compliance_{uuid.uuid4().hex[:12]}"
+        
+        self._add_reasoning("🚀 Starting Single Incident Compliance Analysis")
+        self._add_reasoning(f"Incident: {incident_data.get('title', 'Unknown')}")
+        self._add_reasoning(f"Priority: {incident_data.get('priority', 'Unknown')}")
+        self._add_reasoning(f"Contract Provider: {contract_data.contract_metadata.provider_name}")
+        self._add_reasoning(f"Monthly Fee Basis: ${monthly_fee:,.2f}")
+        
+        # Convert incident data to PagerDutyIncident format for analysis
+        from datetime import datetime, timedelta
+        
+        # Calculate duration (assume incident just started if no duration provided)
+        duration_hours = incident_data.get('duration_hours', 0.5)  # Default 30 minutes
+        
+        pagerduty_incident = PagerDutyIncident(
+            incident_id=incident_data.get('incident_id', 'unknown'),
+            title=incident_data.get('title', 'Unknown Incident'),
+            priority=incident_data.get('priority', 'P3'),
+            service=incident_data.get('service', 'unknown-service'),
+            status=incident_data.get('status', 'OPEN'),
+            created_at=incident_data.get('created_at', datetime.utcnow().isoformat()),
+            resolved_at=incident_data.get('resolved_at', ''),
+            duration_hours=duration_hours,
+            acknowledged_minutes=None,  # Not yet acknowledged
+            workaround_hours=None,  # No workaround yet
+            affected_users=incident_data.get('affected_users', 0),
+            root_cause=incident_data.get('root_cause', 'under_investigation'),
+            description=incident_data.get('description', '')
+        )
+        
+        self._add_reasoning(f"📊 Analyzing incident: {pagerduty_incident.incident_id}")
+        
+        # Analyze the single incident
+        incident_analyses = []
+        analysis = await self._analyze_incident(
+            pagerduty_incident,
+            contract_data.incident_slas,
+            contract_data.service_credits,
+            contract_data.liability_exclusions,
+            monthly_fee
+        )
+        incident_analyses.append(analysis)
+        
+        total_incident_exposure = analysis.financial_exposure if analysis.breach_detected else 0.0
+        total_waived = analysis.waived_amount if analysis.liability_exclusion_applied else 0.0
+        breached_count = 1 if analysis.breach_detected else 0
+        waived_count = 1 if analysis.liability_exclusion_applied else 0
+        
+        # For single incident, skip KPI and availability analysis
+        kpi_analyses = []
+        availability_analyses = []
+        availability_exposure = 0.0
+        
+        # Calculate financial summary
+        total_exposure = total_incident_exposure + availability_exposure
+        net_exposure = total_exposure - total_waived
+        
+        financial_summary = FinancialSummary(
+            total_estimated_exposure=total_exposure,
+            total_waived_penalties=total_waived,
+            net_exposure=net_exposure,
+            monthly_fee_basis=monthly_fee,
+            exposure_percentage=round((net_exposure / monthly_fee) * 100, 2) if monthly_fee > 0 else 0.0,
+            incidents_with_exposure=breached_count,
+            incidents_waived=waived_count,
+            availability_penalties=availability_exposure,
+            incident_penalties=total_incident_exposure
+        )
+        
+        # Determine overall status and severity
+        if breached_count > 0 and waived_count == 0:
+            overall_status = ComplianceStatus.BREACH
+            breach_severity = BreachSeverity.HIGH if total_incident_exposure > monthly_fee * 0.05 else BreachSeverity.MEDIUM
+        elif breached_count > 0 and waived_count > 0:
+            overall_status = ComplianceStatus.WAIVED
+            breach_severity = BreachSeverity.LOW
+        else:
+            overall_status = ComplianceStatus.COMPLIANT
+            breach_severity = BreachSeverity.NONE
+        
+        self._add_reasoning(f"✅ Analysis Complete - Status: {overall_status.value}")
+        self._add_reasoning(f"💰 Financial Exposure: ${net_exposure:,.2f}")
+        
+        return ComplianceReport(
+            report_id=report_id,
+            contract_id=contract_data.contract_metadata.contract_id or "unknown",
+            generated_at=datetime.utcnow().isoformat(),
+            incident_analysis=incident_analyses,
+            kpi_analysis=kpi_analyses,
+            availability_analysis=availability_analyses,
+            financial_summary=financial_summary,
+            overall_status=overall_status,
+            breach_severity=breach_severity,
+            reasoning_stream=self.reasoning_stream,
+            total_incidents=1,
+            breached_incidents=breached_count,
+            waived_incidents=waived_count,
+            breached_kpis=0,
+            total_kpis=0
+        )
+    
     async def analyze_compliance(
         self,
         contract_data: ExtractedContract,
         monthly_fee: float = 100000.0
     ) -> ComplianceReport:
         """
-        Run complete compliance analysis
+        Run complete compliance analysis (all incidents)
         
         Args:
             contract_data: Extracted contract with SLA obligations

@@ -90,10 +90,22 @@ function TabPanel(props: TabPanelProps) {
   );
 }
 
+interface RawGitHubIssue {
+  issue_number: number;
+  title: string;
+  body: string;
+  labels: string[];
+  state: string;
+  created_at: string;
+  updated_at: string;
+  html_url: string;
+}
+
 const WarRoom: React.FC = () => {
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [activeTab, setActiveTab] = useState(0);
   const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [rawGitHubIssues, setRawGitHubIssues] = useState<RawGitHubIssue[]>([]);
   const [reasoningLogs, setReasoningLogs] = useState<Record<string, ReasoningLog[]>>({});
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
@@ -103,6 +115,7 @@ const WarRoom: React.FC = () => {
   // Load contracts on mount
   useEffect(() => {
     loadContracts();
+    loadRawGitHubIssues();
   }, []);
 
   // Auto-refresh incidents every 5 seconds
@@ -139,6 +152,19 @@ const WarRoom: React.FC = () => {
     }
   };
 
+  const loadRawGitHubIssues = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/events/github/raw-issues`);
+      const data = await response.json();
+      
+      if (data.success && data.issues) {
+        setRawGitHubIssues(data.issues);
+      }
+    } catch (error) {
+      console.error('Failed to load raw GitHub issues:', error);
+    }
+  };
+
   const loadIncidents = async () => {
     try {
       const response = await fetch(`${API_BASE}/events/incidents/live?limit=100`);
@@ -148,9 +174,9 @@ const WarRoom: React.FC = () => {
         setIncidents(data.incidents);
         setLastUpdate(new Date());
         
-        // Load reasoning logs for incidents that are being analyzed
+        // Load reasoning logs for all incidents that have started analysis
         data.incidents.forEach((incident: Incident) => {
-          if (incident.sla_analysis_started && !incident.sla_analysis_completed) {
+          if (incident.sla_analysis_started) {
             loadReasoningLogs(incident.incident_id);
           }
         });
@@ -182,9 +208,8 @@ const WarRoom: React.FC = () => {
             agent: latestLog.agent,
             task: latestLog.task
           });
-        } else {
-          setActiveAgent(null);
         }
+        // Don't set to null - keep showing last active agent
       }
     } catch (error) {
       console.error(`Failed to load reasoning logs for ${incidentId}:`, error);
@@ -406,18 +431,18 @@ const WarRoom: React.FC = () => {
             }
           }}
         >
-          <Tab 
+          <Tab
             label={
-              <Badge badgeContent={activeIncidents.length} color="error">
+              <Badge badgeContent={rawGitHubIssues.length} color="error">
                 All Incidents
               </Badge>
-            } 
+            }
           />
           {contracts.map((contract, index) => (
             <Tab
               key={contract.contract_id}
               label={
-                <Badge badgeContent={0} color="error">
+                <Badge badgeContent={currentIncidents.length} color="error">
                   {contract.provider || `Contract ${index + 1}`}
                 </Badge>
               }
@@ -427,11 +452,69 @@ const WarRoom: React.FC = () => {
 
         {/* Tab Panels */}
         <TabPanel value={activeTab} index={0}>
-          <IncidentList 
-            incidents={currentIncidents} 
-            reasoningLogs={reasoningLogs}
-            onRefresh={loadIncidents}
-          />
+          {/* All Incidents - Raw GitHub Issues (No Analysis) */}
+          <Box>
+            <Typography variant="h6" sx={{ color: 'white', mb: 3 }}>
+              📋 Raw GitHub Issues (No Analysis)
+            </Typography>
+            {rawGitHubIssues.length === 0 ? (
+              <Alert severity="info">No GitHub issues found</Alert>
+            ) : (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {rawGitHubIssues.map((issue) => (
+                  <Card key={issue.issue_number} sx={{ bgcolor: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                    <CardContent>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                        <Chip
+                          label={`#${issue.issue_number}`}
+                          size="small"
+                          sx={{ bgcolor: 'rgba(0,230,118,0.2)', color: '#00e676' }}
+                        />
+                        <Chip
+                          label={issue.state.toUpperCase()}
+                          size="small"
+                          sx={{ bgcolor: issue.state === 'open' ? 'rgba(255,152,0,0.2)' : 'rgba(76,175,80,0.2)', color: issue.state === 'open' ? '#ff9800' : '#4caf50' }}
+                        />
+                        {issue.labels.map((label) => (
+                          <Chip
+                            key={label}
+                            label={label}
+                            size="small"
+                            sx={{ bgcolor: 'rgba(33,150,243,0.2)', color: '#2196f3' }}
+                          />
+                        ))}
+                      </Box>
+                      <Typography variant="h6" sx={{ color: 'white', mb: 1 }}>
+                        {issue.title}
+                      </Typography>
+                      {issue.body && (
+                        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)', mb: 2 }}>
+                          {issue.body.substring(0, 200)}{issue.body.length > 200 ? '...' : ''}
+                        </Typography>
+                      )}
+                      <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>
+                          Created: {new Date(issue.created_at).toLocaleString()}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>
+                          •
+                        </Typography>
+                        <Typography
+                          component="a"
+                          href={issue.html_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          sx={{ color: '#2196f3', textDecoration: 'none', fontSize: '0.75rem', '&:hover': { textDecoration: 'underline' } }}
+                        >
+                          View on GitHub →
+                        </Typography>
+                      </Box>
+                    </CardContent>
+                  </Card>
+                ))}
+              </Box>
+            )}
+          </Box>
         </TabPanel>
         
         {contracts.map((contract, index) => (

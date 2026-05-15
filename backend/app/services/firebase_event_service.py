@@ -246,6 +246,61 @@ class FirebaseEventService:
         except Exception as e:
             logger.error(f"Failed to get financial snapshot: {e}")
             return None
+    # ========================================================================
+    # COMPLIANCE REPORT OPERATIONS
+    # ========================================================================
+    
+    async def save_compliance_report(
+        self, 
+        incident_id: str, 
+        report_data: Dict[str, Any]
+    ) -> str:
+        """
+        Save full compliance report for an incident
+        This stores the detailed analysis from the compliance agent
+        """
+        try:
+            report_id = f"report_{uuid.uuid4().hex[:8]}"
+            report_dict = {
+                'report_id': report_id,
+                'incident_id': incident_id,
+                'report_data': report_data,
+                'created_at': datetime.utcnow().isoformat(),
+                'updated_at': datetime.utcnow().isoformat()
+            }
+            
+            if self.db:
+                doc_ref = self.db.collection('compliance_reports').document(incident_id)
+                doc_ref.set(report_dict)
+                logger.info(f"Saved compliance report for incident: {incident_id}")
+            else:
+                if 'compliance_reports' not in self._in_memory_store:
+                    self._in_memory_store['compliance_reports'] = {}
+                self._in_memory_store['compliance_reports'][incident_id] = report_dict
+                logger.info(f"Saved compliance report in memory: {incident_id}")
+            
+            return report_id
+            
+        except Exception as e:
+            logger.error(f"Failed to save compliance report: {e}")
+            raise
+    
+    async def get_compliance_report(self, incident_id: str) -> Optional[Dict[str, Any]]:
+        """Get compliance report for an incident"""
+        try:
+            if self.db:
+                doc_ref = self.db.collection('compliance_reports').document(incident_id)
+                doc = doc_ref.get()
+                return doc.to_dict() if doc.exists else None
+            else:
+                if 'compliance_reports' not in self._in_memory_store:
+                    self._in_memory_store['compliance_reports'] = {}
+                return self._in_memory_store['compliance_reports'].get(incident_id)
+                
+        except Exception as e:
+            logger.error(f"Failed to get compliance report: {e}")
+            return None
+
     
     # ========================================================================
     # ALERT OPERATIONS
