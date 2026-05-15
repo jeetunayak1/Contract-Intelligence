@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Grid,
@@ -6,535 +6,691 @@ import {
   CardContent,
   Typography,
   Chip,
-  LinearProgress,
   Alert,
-  Button,
-  IconButton,
   Tabs,
   Tab,
   Paper,
   Divider,
-  CircularProgress,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel
+  Badge,
+  IconButton,
+  Tooltip
 } from '@mui/material';
 import {
   Warning as WarningIcon,
   CheckCircle as CheckCircleIcon,
   Error as ErrorIcon,
-  TrendingUp as TrendingUpIcon,
-  TrendingDown as TrendingDownIcon,
-  Refresh as RefreshIcon,
-  PlayArrow as PlayArrowIcon,
-  Shield as ShieldIcon,
   AttachMoney as MoneyIcon,
-  Speed as SpeedIcon
+  Speed as SpeedIcon,
+  Refresh as RefreshIcon,
+  FiberManualRecord as LiveIcon
 } from '@mui/icons-material';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const API_BASE = 'http://localhost:8000/api/v1';
 
-interface ComplianceReport {
-  report_id: string;
-  overall_status: string;
-  breach_severity: string;
-  incident_analysis: any[];
-  kpi_analysis: any[];
-  financial_summary: {
-    total_estimated_exposure: number;
-    total_waived_penalties: number;
-    net_exposure: number;
-    exposure_percentage: number;
-    incidents_with_exposure: number;
-    incidents_waived: number;
-  };
-  reasoning_stream: Array<{
-    timestamp: string;
-    message: string;
-    level: string;
-  }>;
-  total_incidents: number;
-  breached_incidents: number;
-  waived_incidents: number;
+interface Incident {
+  incident_id: string;
+  source: string;
+  priority: string;
+  severity: string;
+  service: string;
+  title: string;
+  description?: string;
+  status: string;
+  github_issue_number?: number;
+  affected_users?: number;
+  estimated_revenue_impact?: number;
+  sla_analysis_started: boolean;
+  sla_analysis_completed: boolean;
+  crew_execution_id?: string;
+  crew_status?: string;
+  breach_detected: boolean;
+  financial_exposure: number;
+  penalty_waived: boolean;
+  waiver_reason?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface ReasoningLog {
+  log_id: string;
+  incident_id: string;
+  timestamp: string;
+  level: string;
+  message: string;
+  agent?: string;
+  task?: string;
+}
+
+interface Contract {
+  contract_id: string;
+  filename: string;
+  provider: string;
+  uploaded_at: string;
+}
+
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
+
+function TabPanel(props: TabPanelProps) {
+  const { children, value, index, ...other } = props;
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`contract-tabpanel-${index}`}
+      aria-labelledby={`contract-tab-${index}`}
+      {...other}
+    >
+      {value === index && <Box sx={{ pt: 3 }}>{children}</Box>}
+    </div>
+  );
 }
 
 const WarRoom: React.FC = () => {
-  const [loading, setLoading] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [report, setReport] = useState<ComplianceReport | null>(null);
-  const [contracts, setContracts] = useState<any[]>([]);
-  const [selectedContract, setSelectedContract] = useState<string>('');
+  const [contracts, setContracts] = useState<Contract[]>([]);
   const [activeTab, setActiveTab] = useState(0);
-  const [reasoningIndex, setReasoningIndex] = useState(0);
+  const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [reasoningLogs, setReasoningLogs] = useState<Record<string, ReasoningLog[]>>({});
+  const [loading, setLoading] = useState(true);
+  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [activeAgent, setActiveAgent] = useState<{agent: string, task: string} | null>(null);
 
+  // Load contracts on mount
   useEffect(() => {
     loadContracts();
   }, []);
 
+  // Auto-refresh incidents every 5 seconds
   useEffect(() => {
-    if (report && report.reasoning_stream.length > 0) {
-      const timer = setInterval(() => {
-        setReasoningIndex(prev => {
-          if (prev < report.reasoning_stream.length - 1) {
-            return prev + 1;
-          }
-          clearInterval(timer);
-          return prev;
-        });
-      }, 300);
-      return () => clearInterval(timer);
+    if (autoRefresh) {
+      const interval = setInterval(() => {
+        loadIncidents();
+      }, 5000);
+      return () => clearInterval(interval);
     }
-  }, [report]);
+  }, [autoRefresh]);
+
+  // Load incidents when tab changes
+  useEffect(() => {
+    if (contracts.length > 0) {
+      loadIncidents();
+    }
+  }, [activeTab, contracts]);
 
   const loadContracts = async () => {
     try {
-      const response = await fetch(`${API_BASE}/compliance/contracts`);
+      const response = await fetch(`${API_BASE}/events/incidents/live`);
       const data = await response.json();
-      if (data.success && data.contracts.length > 0) {
-        setContracts(data.contracts);
-        setSelectedContract(data.contracts[0].contract_id);
+      
+      // Get unique contracts from compliance API
+      const contractsResponse = await fetch(`${API_BASE}/compliance/contracts`);
+      const contractsData = await contractsResponse.json();
+      
+      if (contractsData.success && contractsData.contracts.length > 0) {
+        setContracts(contractsData.contracts);
       }
     } catch (error) {
       console.error('Failed to load contracts:', error);
     }
   };
 
-  const runAnalysis = async () => {
-    if (!selectedContract) return;
-    
-    setAnalyzing(true);
-    setReasoningIndex(0);
-    
+  const loadIncidents = async () => {
     try {
-      const response = await fetch(
-        `${API_BASE}/compliance/analyze?contract_id=${selectedContract}&monthly_fee=100000`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        }
-      );
+      const response = await fetch(`${API_BASE}/events/incidents/live?limit=100`);
+      const data = await response.json();
       
-      if (!response.ok) {
-        throw new Error(`Analysis failed: ${response.statusText}`);
+      if (data.incidents) {
+        setIncidents(data.incidents);
+        setLastUpdate(new Date());
+        
+        // Load reasoning logs for incidents that are being analyzed
+        data.incidents.forEach((incident: Incident) => {
+          if (incident.sla_analysis_started && !incident.sla_analysis_completed) {
+            loadReasoningLogs(incident.incident_id);
+          }
+        });
       }
       
-      const data = await response.json();
-      setReport(data);
+      setLoading(false);
     } catch (error) {
-      console.error('Analysis failed:', error);
-      alert('Analysis failed. Please check console for details.');
-    } finally {
-      setAnalyzing(false);
+      console.error('Failed to load incidents:', error);
+      setLoading(false);
     }
+  };
+
+  const loadReasoningLogs = async (incidentId: string) => {
+    try {
+      const response = await fetch(`${API_BASE}/events/reasoning/${incidentId}`);
+      const data = await response.json();
+      
+      if (data.logs) {
+        setReasoningLogs(prev => ({
+          ...prev,
+          [incidentId]: data.logs
+        }));
+        
+        // Extract active agent from most recent log with agent info
+        const logsWithAgent = data.logs.filter((log: ReasoningLog) => log.agent && log.task);
+        if (logsWithAgent.length > 0) {
+          const latestLog = logsWithAgent[logsWithAgent.length - 1];
+          setActiveAgent({
+            agent: latestLog.agent,
+            task: latestLog.task
+          });
+        } else {
+          setActiveAgent(null);
+        }
+      }
+    } catch (error) {
+      console.error(`Failed to load reasoning logs for ${incidentId}:`, error);
+    }
+  };
+
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setActiveTab(newValue);
+  };
+
+  const toggleAutoRefresh = () => {
+    setAutoRefresh(!autoRefresh);
+  };
+
+  const manualRefresh = () => {
+    loadIncidents();
+  };
+
+  // Get incidents for current contract
+  const getCurrentContractIncidents = () => {
+    if (contracts.length === 0) return incidents;
+    // For now, show all incidents. In production, filter by contract_id
+    return incidents;
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'COMPLIANT': return '#00e676';
-      case 'BREACH': return '#ff1744';
-      case 'WARNING': return '#ffc107';
-      case 'WAIVED': return '#00bcd4';
+      case 'OPEN': return 'error';
+      case 'ACKNOWLEDGED': return 'warning';
+      case 'INVESTIGATING': return 'info';
+      case 'RESOLVED': return 'success';
+      default: return 'default';
+    }
+  };
+
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'P1':
+      case 'SEV1':
+      case 'CRITICAL': return '#ff1744';
+      case 'P2': return '#ff9100';
+      case 'P3': return '#ffc107';
+      case 'P4': return '#4caf50';
       default: return '#9e9e9e';
     }
   };
 
-  const getSeverityColor = (severity: string) => {
-    switch (severity) {
-      case 'CRITICAL': return '#ff1744';
-      case 'HIGH': return '#ff9100';
-      case 'MEDIUM': return '#ffc107';
-      case 'LOW': return '#00e676';
-      default: return '#9e9e9e';
-    }
+  const getSeverityBadge = (severity: string) => {
+    const colors: Record<string, string> = {
+      'CRITICAL': '#ff1744',
+      'HIGH': '#ff9100',
+      'MEDIUM': '#ffc107',
+      'LOW': '#4caf50'
+    };
+    return colors[severity] || '#9e9e9e';
   };
+
+  const currentIncidents = getCurrentContractIncidents();
+  const activeIncidents = currentIncidents.filter(i => ['OPEN', 'ACKNOWLEDGED', 'INVESTIGATING'].includes(i.status));
+  const totalExposure = currentIncidents.reduce((sum, i) => sum + (i.breach_detected && !i.penalty_waived ? i.financial_exposure : 0), 0);
+  const totalWaived = currentIncidents.reduce((sum, i) => sum + (i.penalty_waived ? i.financial_exposure : 0), 0);
+  const breachCount = currentIncidents.filter(i => i.breach_detected).length;
 
   return (
-    <Box sx={{ p: 3, bgcolor: '#0a0a0c', minHeight: '100vh' }}>
+    <Box sx={{ p: 3, bgcolor: '#0a0e27', minHeight: '100vh' }}>
       {/* Header */}
       <Box sx={{ mb: 4 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <ShieldIcon sx={{ fontSize: 48, color: 'primary.main' }} />
-            <Box>
-              <Typography variant="h3" sx={{ fontWeight: 800, color: 'white' }}>
-                AI SLA <span style={{ color: '#00e676' }}>WAR ROOM</span>
-              </Typography>
-              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.5)' }}>
-                Autonomous Contract Risk Intelligence Platform
-              </Typography>
-            </Box>
+            <Typography variant="h3" sx={{ fontWeight: 800, color: 'white', display: 'flex', alignItems: 'center', gap: 2 }}>
+              🚨 LIVE INCIDENT FEED
+              {autoRefresh && (
+                <motion.div
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ repeat: Infinity, duration: 2 }}
+                >
+                  <LiveIcon sx={{ color: '#00e676', fontSize: 16 }} />
+                </motion.div>
+              )}
+            </Typography>
           </Box>
           
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-            <FormControl sx={{ minWidth: 300 }}>
-              <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Select Contract</InputLabel>
-              <Select
-                value={selectedContract}
-                onChange={(e) => setSelectedContract(e.target.value)}
-                label="Select Contract"
-                sx={{
-                  color: 'white',
-                  bgcolor: 'rgba(255,255,255,0.05)',
-                  border: '1px solid rgba(0, 230, 118, 0.3)',
-                  '& .MuiOutlinedInput-notchedOutline': {
-                    borderColor: 'rgba(0, 230, 118, 0.3)'
-                  },
-                  '&:hover .MuiOutlinedInput-notchedOutline': {
-                    borderColor: 'rgba(0, 230, 118, 0.5)'
-                  },
-                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                    borderColor: 'primary.main'
-                  }
+            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>
+              Last update: {lastUpdate.toLocaleTimeString()}
+            </Typography>
+            <Tooltip title={autoRefresh ? "Disable auto-refresh" : "Enable auto-refresh"}>
+              <IconButton 
+                onClick={toggleAutoRefresh}
+                sx={{ 
+                  color: autoRefresh ? '#00e676' : 'rgba(255,255,255,0.3)',
+                  border: '1px solid',
+                  borderColor: autoRefresh ? '#00e676' : 'rgba(255,255,255,0.1)'
                 }}
               >
-                {contracts.map((contract) => (
-                  <MenuItem key={contract.contract_id} value={contract.contract_id}>
-                    <Box>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {contract.provider || 'Unknown Provider'}
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>
-                        {contract.filename}
-                      </Typography>
-                    </Box>
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            
-            <Button
-              variant="contained"
-              size="large"
-              startIcon={analyzing ? <CircularProgress size={20} /> : <PlayArrowIcon />}
-              onClick={runAnalysis}
-              disabled={analyzing || !selectedContract}
-              sx={{
-                bgcolor: 'primary.main',
-                color: 'black',
-                fontWeight: 700,
-                px: 4,
-                py: 1.5,
-                '&:hover': { bgcolor: 'primary.light' }
-              }}
-            >
-              {analyzing ? 'ANALYZING...' : 'RUN ANALYSIS'}
-            </Button>
+                <LiveIcon />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Refresh now">
+              <IconButton onClick={manualRefresh} sx={{ color: 'white', border: '1px solid rgba(255,255,255,0.1)' }}>
+                <RefreshIcon />
+              </IconButton>
+            </Tooltip>
           </Box>
         </Box>
         
-        {selectedContract && contracts.length > 0 && (
-          <Alert
-            severity="info"
-            sx={{
-              bgcolor: 'rgba(0, 188, 212, 0.1)',
-              border: '1px solid rgba(0, 188, 212, 0.3)',
-              color: 'white'
-            }}
-          >
-            <Typography variant="body2">
-              <strong>Selected Contract:</strong> {contracts.find(c => c.contract_id === selectedContract)?.provider} - {contracts.find(c => c.contract_id === selectedContract)?.filename}
-            </Typography>
-          </Alert>
-        )}
+        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)' }}>
+          Autonomous Contract Risk Intelligence Platform - Real-time GitHub Webhook Integration
+        </Typography>
       </Box>
 
       {/* KPI Cards */}
-      {report && (
-        <Grid container spacing={3} sx={{ mb: 4 }}>
-          <Grid item xs={12} md={3}>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-            >
-              <Card sx={{ 
-                bgcolor: 'rgba(0, 230, 118, 0.1)', 
-                border: '1px solid rgba(0, 230, 118, 0.3)',
-                borderRadius: 3
-              }}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 1 }}>
-                      SLA Health
-                    </Typography>
-                    <SpeedIcon sx={{ color: 'primary.main' }} />
-                  </Box>
-                  <Typography variant="h3" sx={{ fontWeight: 800, color: 'white', mb: 1 }}>
-                    {Math.round(((report.total_incidents - report.breached_incidents) / report.total_incidents) * 100)}%
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid item xs={12} md={3}>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+            <Card sx={{ bgcolor: 'rgba(0, 230, 118, 0.1)', border: '1px solid rgba(0, 230, 118, 0.3)', borderRadius: 3 }}>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 1 }}>
+                    Active Incidents
                   </Typography>
-                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>
-                    {report.total_incidents - report.breached_incidents} of {report.total_incidents} compliant
-                  </Typography>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </Grid>
-
-          <Grid item xs={12} md={3}>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-            >
-              <Card sx={{ 
-                bgcolor: 'rgba(255, 23, 68, 0.1)', 
-                border: '1px solid rgba(255, 23, 68, 0.3)',
-                borderRadius: 3
-              }}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 1 }}>
-                      Active Breaches
-                    </Typography>
-                    <ErrorIcon sx={{ color: '#ff1744' }} />
-                  </Box>
-                  <Typography variant="h3" sx={{ fontWeight: 800, color: 'white', mb: 1 }}>
-                    {report.breached_incidents}
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>
-                    {report.waived_incidents} waived by exclusions
-                  </Typography>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </Grid>
-
-          <Grid item xs={12} md={3}>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-            >
-              <Card sx={{ 
-                bgcolor: 'rgba(255, 193, 7, 0.1)', 
-                border: '1px solid rgba(255, 193, 7, 0.3)',
-                borderRadius: 3
-              }}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 1 }}>
-                      Financial Exposure
-                    </Typography>
-                    <MoneyIcon sx={{ color: '#ffc107' }} />
-                  </Box>
-                  <Typography variant="h3" sx={{ fontWeight: 800, color: 'white', mb: 1 }}>
-                    ${(report.financial_summary.net_exposure / 1000).toFixed(1)}K
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>
-                    {report.financial_summary.exposure_percentage.toFixed(1)}% of monthly fee
-                  </Typography>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </Grid>
-
-          <Grid item xs={12} md={3}>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.3 }}
-            >
-              <Card sx={{ 
-                bgcolor: 'rgba(0, 188, 212, 0.1)', 
-                border: '1px solid rgba(0, 188, 212, 0.3)',
-                borderRadius: 3
-              }}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                    <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 1 }}>
-                      Waived Penalties
-                    </Typography>
-                    <CheckCircleIcon sx={{ color: '#00bcd4' }} />
-                  </Box>
-                  <Typography variant="h3" sx={{ fontWeight: 800, color: 'white', mb: 1 }}>
-                    ${(report.financial_summary.total_waived_penalties / 1000).toFixed(1)}K
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>
-                    Liability exclusions applied
-                  </Typography>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </Grid>
-        </Grid>
-      )}
-
-      {/* Main Content */}
-      <Grid container spacing={3}>
-        {/* AI Reasoning Stream */}
-        <Grid item xs={12} md={6}>
-          <Card sx={{
-            bgcolor: '#151518',
-            border: '1px solid rgba(0, 230, 118, 0.2)',
-            borderRadius: 3,
-            height: 'calc(100vh - 450px)',
-            minHeight: '400px',
-            maxHeight: '700px',
-            display: 'flex',
-            flexDirection: 'column'
-          }}>
-            <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column', p: 3 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, flexShrink: 0 }}>
-                <Typography variant="h6" sx={{ fontWeight: 700, color: 'white' }}>
-                  🤖 AI Reasoning Stream
+                  <SpeedIcon sx={{ color: '#00e676' }} />
+                </Box>
+                <Typography variant="h3" sx={{ fontWeight: 800, color: 'white', mb: 1 }}>
+                  {activeIncidents.length}
                 </Typography>
-                <Box className="agent-pulse" sx={{ width: 8, height: 8, bgcolor: 'primary.main', borderRadius: '50%' }} />
-              </Box>
-              
-              <Box sx={{
-                flex: 1,
-                bgcolor: 'rgba(0,0,0,0.3)',
-                borderRadius: 2,
-                p: 2,
-                fontFamily: 'monospace',
-                fontSize: '0.85rem',
-                overflowY: 'auto',
-                overflowX: 'hidden',
-                border: '1px solid rgba(0, 230, 118, 0.1)',
-                minHeight: 0
-              }}>
-                <AnimatePresence>
-                  {report && report.reasoning_stream.slice(0, reasoningIndex + 1).map((step, index) => (
-                    <motion.div
-                      key={index}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.3 }}
-                      style={{ marginBottom: '12px' }}
-                    >
-                      <Box sx={{ display: 'flex', gap: 2 }}>
-                        <Typography sx={{ 
-                          color: step.level === 'ERROR' ? '#ff1744' : 
-                                 step.level === 'WARNING' ? '#ffc107' : 
-                                 '#00e676',
-                          minWidth: '60px'
-                        }}>
-                          [{new Date(step.timestamp).toLocaleTimeString()}]
-                        </Typography>
-                        <Typography sx={{ color: 'rgba(255,255,255,0.9)' }}>
-                          {step.message}
-                        </Typography>
-                      </Box>
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-              </Box>
-            </CardContent>
-          </Card>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>
+                  {currentIncidents.length} total incidents
+                </Typography>
+              </CardContent>
+            </Card>
+          </motion.div>
         </Grid>
 
-        {/* Incident Analysis */}
-        <Grid item xs={12} md={6}>
-          <Card sx={{
-            bgcolor: '#151518',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            borderRadius: 3,
-            height: 'calc(100vh - 450px)',
-            minHeight: '400px',
-            maxHeight: '700px',
-            display: 'flex',
-            flexDirection: 'column'
-          }}>
-            <CardContent sx={{ height: '100%', display: 'flex', flexDirection: 'column', p: 3 }}>
-              <Typography variant="h6" sx={{ fontWeight: 700, color: 'white', mb: 2, flexShrink: 0 }}>
-                🚨 Incident Analysis
-              </Typography>
-              
-              <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
-                {report && report.incident_analysis.map((incident, index) => (
-                  <motion.div
-                    key={incident.incident_id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, delay: index * 0.1 }}
-                  >
-                    <Card sx={{ 
-                      mb: 2, 
-                      bgcolor: incident.breach_detected ? 'rgba(255, 23, 68, 0.1)' : 'rgba(0, 230, 118, 0.1)',
-                      border: `1px solid ${incident.breach_detected ? 'rgba(255, 23, 68, 0.3)' : 'rgba(0, 230, 118, 0.3)'}`,
-                      borderRadius: 2
-                    }}>
-                      <CardContent>
-                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                          <Typography variant="subtitle2" sx={{ fontWeight: 700, color: 'white' }}>
-                            {incident.incident_id}
-                          </Typography>
-                          <Chip 
-                            label={incident.priority} 
-                            size="small"
-                            sx={{ 
-                              bgcolor: getSeverityColor(incident.breach_severity),
-                              color: 'black',
-                              fontWeight: 700
-                            }}
-                          />
-                        </Box>
-                        
-                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', display: 'block', mb: 1 }}>
-                          {incident.title}
-                        </Typography>
-                        
-                        <Box sx={{ display: 'flex', gap: 2, mb: 1 }}>
-                          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>
-                            Target: {incident.sla_target_hours}h
-                          </Typography>
-                          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>
-                            Actual: {incident.actual_resolution_hours}h
-                          </Typography>
-                        </Box>
-                        
-                        {incident.liability_exclusion_applied && (
-                          <Alert severity="info" sx={{ mt: 1, py: 0 }}>
-                            <Typography variant="caption">
-                              ✅ Penalty waived: ${incident.waived_amount.toLocaleString()}
-                            </Typography>
-                          </Alert>
-                        )}
-                        
-                        {incident.breach_detected && !incident.liability_exclusion_applied && (
-                          <Alert severity="error" sx={{ mt: 1, py: 0 }}>
-                            <Typography variant="caption">
-                              💰 Exposure: ${incident.financial_exposure.toLocaleString()}
-                            </Typography>
-                          </Alert>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                ))}
-              </Box>
-            </CardContent>
-          </Card>
+        <Grid item xs={12} md={3}>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+            <Card sx={{ bgcolor: 'rgba(255, 23, 68, 0.1)', border: '1px solid rgba(255, 23, 68, 0.3)', borderRadius: 3 }}>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 1 }}>
+                    SLA Breaches
+                  </Typography>
+                  <ErrorIcon sx={{ color: '#ff1744' }} />
+                </Box>
+                <Typography variant="h3" sx={{ fontWeight: 800, color: 'white', mb: 1 }}>
+                  {breachCount}
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>
+                  {currentIncidents.filter(i => i.penalty_waived).length} waived by exclusions
+                </Typography>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </Grid>
+
+        <Grid item xs={12} md={3}>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+            <Card sx={{ bgcolor: 'rgba(255, 193, 7, 0.1)', border: '1px solid rgba(255, 193, 7, 0.3)', borderRadius: 3 }}>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 1 }}>
+                    Financial Exposure
+                  </Typography>
+                  <MoneyIcon sx={{ color: '#ffc107' }} />
+                </Box>
+                <Typography variant="h3" sx={{ fontWeight: 800, color: 'white', mb: 1 }}>
+                  ${(totalExposure / 1000).toFixed(1)}K
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>
+                  ${(totalWaived / 1000).toFixed(1)}K waived
+                </Typography>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </Grid>
+
+        <Grid item xs={12} md={3}>
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+            <Card sx={{ bgcolor: 'rgba(33, 150, 243, 0.1)', border: '1px solid rgba(33, 150, 243, 0.3)', borderRadius: 3 }}>
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 1 }}>
+                    Analyzing Now
+                  </Typography>
+                  <CheckCircleIcon sx={{ color: '#2196f3' }} />
+                </Box>
+                <Typography variant="h3" sx={{ fontWeight: 800, color: 'white', mb: 1 }}>
+                  {currentIncidents.filter(i => i.sla_analysis_started && !i.sla_analysis_completed).length}
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>
+                  Crew executions active
+                </Typography>
+              </CardContent>
+            </Card>
+          </motion.div>
         </Grid>
       </Grid>
 
-      {/* Loading State */}
-      {analyzing && !report && (
-        <Box sx={{ 
-          position: 'fixed', 
-          top: 0, 
-          left: 0, 
-          right: 0, 
-          bottom: 0, 
-          bgcolor: 'rgba(0,0,0,0.8)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 9999
-        }}>
-          <Box sx={{ textAlign: 'center' }}>
-            <CircularProgress size={60} sx={{ color: 'primary.main', mb: 2 }} />
-            <Typography variant="h6" sx={{ color: 'white' }}>
-              Running Compliance Analysis...
-            </Typography>
-          </Box>
-        </Box>
-      )}
+      {/* Contract Tabs */}
+      <Paper sx={{ bgcolor: '#151518', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 3, mb: 3 }}>
+        <Tabs
+          value={activeTab}
+          onChange={handleTabChange}
+          variant="scrollable"
+          scrollButtons="auto"
+          sx={{
+            borderBottom: '1px solid rgba(255,255,255,0.1)',
+            '& .MuiTab-root': {
+              color: 'rgba(255,255,255,0.5)',
+              fontWeight: 600,
+              textTransform: 'none',
+              fontSize: '1rem'
+            },
+            '& .Mui-selected': {
+              color: '#00e676 !important'
+            },
+            '& .MuiTabs-indicator': {
+              backgroundColor: '#00e676'
+            }
+          }}
+        >
+          <Tab 
+            label={
+              <Badge badgeContent={activeIncidents.length} color="error">
+                All Incidents
+              </Badge>
+            } 
+          />
+          {contracts.map((contract, index) => (
+            <Tab
+              key={contract.contract_id}
+              label={
+                <Badge badgeContent={0} color="error">
+                  {contract.provider || `Contract ${index + 1}`}
+                </Badge>
+              }
+            />
+          ))}
+        </Tabs>
+
+        {/* Tab Panels */}
+        <TabPanel value={activeTab} index={0}>
+          <IncidentList 
+            incidents={currentIncidents} 
+            reasoningLogs={reasoningLogs}
+            onRefresh={loadIncidents}
+          />
+        </TabPanel>
+        
+        {contracts.map((contract, index) => (
+          <TabPanel key={contract.contract_id} value={activeTab} index={index + 1}>
+            <IncidentList 
+              incidents={currentIncidents.filter(i => true)} // Filter by contract in production
+              reasoningLogs={reasoningLogs}
+              onRefresh={loadIncidents}
+              contractId={contract.contract_id}
+            />
+          </TabPanel>
+        ))}
+      </Paper>
+
+      {/* Floating Active Agent Indicator - Bottom Right */}
+      <AnimatePresence>
+        {activeAgent && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 50 }}
+            style={{
+              position: 'fixed',
+              bottom: 24,
+              right: 24,
+              zIndex: 1000
+            }}
+          >
+            <Card sx={{
+              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              border: '2px solid rgba(255,255,255,0.2)',
+              boxShadow: '0 8px 32px rgba(102, 126, 234, 0.4)',
+              minWidth: 280
+            }}>
+              <CardContent sx={{ p: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ repeat: Infinity, duration: 2, ease: 'linear' }}
+                  >
+                    <Box sx={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: '50%',
+                      background: 'linear-gradient(135deg, #00e676 0%, #00c853 100%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 20
+                    }}>
+                      🤖
+                    </Box>
+                  </motion.div>
+                  
+                  <Box sx={{ flex: 1 }}>
+                    <Typography sx={{
+                      color: 'white',
+                      fontWeight: 700,
+                      fontSize: 14,
+                      mb: 0.5
+                    }}>
+                      {activeAgent.agent}
+                    </Typography>
+                    <Typography sx={{
+                      color: 'rgba(255,255,255,0.8)',
+                      fontSize: 12
+                    }}>
+                      {activeAgent.task}
+                    </Typography>
+                  </Box>
+                  
+                  <motion.div
+                    animate={{ scale: [1, 1.2, 1] }}
+                    transition={{ repeat: Infinity, duration: 1.5 }}
+                  >
+                    <LiveIcon sx={{ color: '#00e676', fontSize: 16 }} />
+                  </motion.div>
+                </Box>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </Box>
+  );
+};
+
+// Incident List Component
+interface IncidentListProps {
+  incidents: Incident[];
+  reasoningLogs: Record<string, ReasoningLog[]>;
+  onRefresh: () => void;
+  contractId?: string;
+}
+
+const IncidentList: React.FC<IncidentListProps> = ({ incidents, reasoningLogs, onRefresh, contractId }) => {
+  const [expandedIncident, setExpandedIncident] = useState<string | null>(null);
+
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case 'P1':
+      case 'SEV1':
+      case 'CRITICAL': return '#ff1744';
+      case 'P2': return '#ff9100';
+      case 'P3': return '#ffc107';
+      case 'P4': return '#4caf50';
+      default: return '#9e9e9e';
+    }
+  };
+
+  if (incidents.length === 0) {
+    return (
+      <Box sx={{ p: 4, textAlign: 'center' }}>
+        <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.5)', mb: 2 }}>
+          No incidents detected
+        </Typography>
+        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.3)' }}>
+          Waiting for GitHub webhook events...
+        </Typography>
+      </Box>
+    );
+  }
+
+  return (
+    <Box sx={{ p: 3 }}>
+      <AnimatePresence>
+        {incidents.map((incident, index) => (
+          <motion.div
+            key={incident.incident_id}
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            transition={{ delay: index * 0.05 }}
+          >
+            <Card 
+              sx={{ 
+                mb: 2,
+                bgcolor: incident.breach_detected ? 'rgba(255, 23, 68, 0.05)' : 'rgba(0, 230, 118, 0.05)',
+                border: `1px solid ${incident.breach_detected ? 'rgba(255, 23, 68, 0.3)' : 'rgba(0, 230, 118, 0.3)'}`,
+                borderRadius: 2,
+                cursor: 'pointer',
+                transition: 'all 0.3s',
+                '&:hover': {
+                  transform: 'translateX(4px)',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
+                }
+              }}
+              onClick={() => setExpandedIncident(expandedIncident === incident.incident_id ? null : incident.incident_id)}
+            >
+              <CardContent>
+                <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 2 }}>
+                  <Box sx={{ flex: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                      <Typography variant="h6" sx={{ color: 'white', fontWeight: 700 }}>
+                        {incident.incident_id}
+                      </Typography>
+                      <Chip 
+                        label={incident.priority}
+                        size="small"
+                        sx={{ 
+                          bgcolor: getPriorityColor(incident.priority),
+                          color: 'white',
+                          fontWeight: 700
+                        }}
+                      />
+                      <Chip 
+                        label={incident.status}
+                        size="small"
+                        variant="outlined"
+                        sx={{ color: 'white', borderColor: 'rgba(255,255,255,0.3)' }}
+                      />
+                      {incident.sla_analysis_started && !incident.sla_analysis_completed && (
+                        <Chip 
+                          label="ANALYZING"
+                          size="small"
+                          icon={<LiveIcon sx={{ fontSize: 12 }} />}
+                          sx={{ bgcolor: 'rgba(33, 150, 243, 0.2)', color: '#2196f3', animation: 'pulse 2s infinite' }}
+                        />
+                      )}
+                    </Box>
+                    
+                    <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.9)', mb: 1 }}>
+                      {incident.title}
+                    </Typography>
+                    
+                    <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>
+                        Service: {incident.service}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>
+                        Source: {incident.source}
+                      </Typography>
+                      {incident.affected_users && (
+                        <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>
+                          Affected: {incident.affected_users.toLocaleString()} users
+                        </Typography>
+                      )}
+                      <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.5)' }}>
+                        Created: {new Date(incident.created_at).toLocaleString()}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  
+                  <Box sx={{ textAlign: 'right' }}>
+                    {incident.breach_detected && (
+                      <Box>
+                        <Typography variant="h5" sx={{ color: incident.penalty_waived ? '#ffc107' : '#ff1744', fontWeight: 800 }}>
+                          ${incident.financial_exposure.toLocaleString()}
+                        </Typography>
+                        {incident.penalty_waived && (
+                          <Chip 
+                            label="WAIVED"
+                            size="small"
+                            sx={{ bgcolor: 'rgba(76, 175, 80, 0.2)', color: '#4caf50', mt: 1 }}
+                          />
+                        )}
+                      </Box>
+                    )}
+                  </Box>
+                </Box>
+
+                {/* Expanded Reasoning Logs */}
+                {expandedIncident === incident.incident_id && reasoningLogs[incident.incident_id] && (
+                  <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                    <Typography variant="subtitle2" sx={{ color: 'white', mb: 2, fontWeight: 700 }}>
+                      🤖 AI Reasoning Stream
+                    </Typography>
+                    <Box sx={{ 
+                      bgcolor: 'rgba(0,0,0,0.3)', 
+                      borderRadius: 2, 
+                      p: 2,
+                      maxHeight: '300px',
+                      overflowY: 'auto',
+                      fontFamily: 'monospace',
+                      fontSize: '0.85rem'
+                    }}>
+                      {reasoningLogs[incident.incident_id].map((log, idx) => (
+                        <Box key={log.log_id} sx={{ mb: 1, display: 'flex', gap: 2 }}>
+                          <Typography sx={{ 
+                            color: log.level === 'ERROR' ? '#ff1744' : 
+                                   log.level === 'WARNING' ? '#ffc107' : 
+                                   log.level === 'SUCCESS' ? '#00e676' : '#2196f3',
+                            minWidth: '60px'
+                          }}>
+                            [{new Date(log.timestamp).toLocaleTimeString()}]
+                          </Typography>
+                          <Typography sx={{ color: 'rgba(255,255,255,0.9)' }}>
+                            {log.message}
+                          </Typography>
+                        </Box>
+                      ))}
+                    </Box>
+                  </Box>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        ))}
+      </AnimatePresence>
     </Box>
   );
 };

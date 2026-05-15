@@ -4,7 +4,11 @@ AI-powered Statement of Work compliance and risk management
 This version runs without IBM Cloud credentials for testing
 """
 import os
+import warnings
 from dotenv import load_dotenv
+
+# Suppress Pydantic V1/V2 mixing warnings from crewai
+warnings.filterwarnings("ignore", message=".*Mixing V1 models and V2 models.*")
 
 # Load environment variables from .env file so that Google Auth picks up GOOGLE_APPLICATION_CREDENTIALS
 load_dotenv()
@@ -19,6 +23,7 @@ from app.api.integrations import router as integrations_router
 from app.api.settings import router as settings_router
 from app.api.contract_intelligence import router as contract_intelligence_router
 from app.api.compliance import router as compliance_router
+from app.api.events import router as events_router
 
 app = FastAPI(
     title="SOW Sentinel - Demo Mode",
@@ -32,6 +37,7 @@ app.include_router(integrations_router)
 app.include_router(settings_router)
 app.include_router(contract_intelligence_router, prefix="/api/v1/contracts", tags=["Contract Intelligence"])
 app.include_router(compliance_router, prefix="/api/v1/compliance", tags=["Compliance & Risk"])
+app.include_router(events_router, tags=["Events & Webhooks"])
 
 # CORS middleware
 app.add_middleware(
@@ -48,22 +54,140 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.on_event("startup")
+async def startup_event():
+    """
+    Startup event handler
+    Automatically syncs existing GitHub issues on application start
+    """
+    import logging
+    import asyncio
+    from app.core.config import Settings
+    
+    logger = logging.getLogger(__name__)
+    settings = Settings()
+    
+    # Only sync if GitHub is configured
+    if settings.GITHUB_ACCESS_TOKEN and settings.GITHUB_REPO_NAME:
+        logger.info("🔄 Syncing existing GitHub issues on startup...")
+        
+        try:
+            from app.services.github_service import get_github_service
+            from app.services.incident_service import get_incident_service
+            
+            github_service = get_github_service(
+                access_token=settings.GITHUB_ACCESS_TOKEN,
+                repo_name=settings.GITHUB_REPO_NAME
+            )
+            
+            # Check if GitHub service is properly initialized
+            if not github_service.repo:
+                logger.warning("⚠️  GitHub repo not accessible. Please check:")
+                logger.warning(f"   - GITHUB_REPO_NAME format: 'owner/repo' (current: {settings.GITHUB_REPO_NAME})")
+                logger.warning(f"   - GITHUB_ACCESS_TOKEN has repo access permissions")
+                logger.warning(f"   - Repository exists and is accessible")
+                logger.info("ℹ️  Skipping existing issues sync. System will still work with webhooks.")
+                return
+            
+            # Get all open issues
+            issues = github_service.list_open_issues()
+            
+            incident_service = get_incident_service()
+            
+            synced_count = 0
+            triggered_count = 0
+            
+            for issue in issues:
+                # Check if it's an incident
+                priority = incident_service.detect_priority(issue.get('title', ''))
+                labels = issue.get('labels', [])  # Already a list of strings from GitHub service
+                
+                is_incident = (
+                    'incident' in labels or
+                    priority is not None
+                )
+                
+                if not is_incident:
+                    continue
+                
+                # Create incident
+                incident = await incident_service.create_incident_from_github(
+                    issue_number=issue['number'],
+                    title=issue['title'],
+                    body=issue.get('body'),
+                    labels=labels
+                )
+                
+                synced_count += 1
+                
+                # Check if should trigger analysis
+                should_trigger = incident_service.should_trigger_analysis(incident.priority)
+                
+                if should_trigger:
+                    triggered_count += 1
+                    # Trigger analysis in background
+                    asyncio.create_task(trigger_analysis_background(
+                        incident_id=incident.incident_id,
+                        contract_id=settings.DEFAULT_CONTRACT_ID,
+                        monthly_fee=100000.0
+                    ))
+            
+            logger.info(f"✅ Synced {synced_count} existing incidents, triggered analysis for {triggered_count}")
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to sync existing issues: {e}")
+    else:
+        logger.info("⚠️  GitHub not configured, skipping existing issues sync")
+
+
+async def trigger_analysis_background(incident_id: str, contract_id: str, monthly_fee: float):
+    """Background task to trigger compliance analysis"""
+    try:
+        from app.crew.compliance_crew import get_compliance_crew
+        from app.core.config import Settings
+        
+        settings = Settings()
+        crew = get_compliance_crew(gemini_api_key=settings.GOOGLE_API_KEY)
+        
+        await crew.analyze_incident(
+            incident_id=incident_id,
+            contract_id=contract_id,
+            monthly_fee=monthly_fee
+        )
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Background analysis failed for {incident_id}: {e}")
+
+
 @app.get("/")
 async def root():
     """Root endpoint"""
     return {
-        "message": "SOW Sentinel API - Demo Mode",
-        "tagline": "Preventing revenue leakage and contract breaches",
-        "version": "1.0.0",
+        "message": "Autonomous Contract Risk Intelligence Platform",
+        "tagline": "Event-driven compliance monitoring with AI agents",
+        "version": "2.0.0",
         "status": "running",
         "mode": "demo",
         "features": [
-            "SOW parsing with AI",
-            "Real-time penalty countdown",
-            "Scope creep detection",
-            "Margin leakage alerts",
-            "Risk assessment"
+            "Contract Intelligence Agent (SLA extraction)",
+            "Real-time GitHub webhook integration",
+            "Autonomous compliance analysis with CrewAI",
+            "Live incident feed with reasoning stream",
+            "Financial exposure tracking",
+            "Liability exclusion matching",
+            "AI War Room dashboard",
+            "Auto-sync existing GitHub issues on startup"
         ],
+        "endpoints": {
+            "github_webhook": "/api/v1/events/github/webhook",
+            "live_incidents": "/api/v1/events/incidents/live",
+            "reasoning_stream": "/api/v1/events/reasoning/{incident_id}",
+            "crew_status": "/api/v1/events/crew/{crew_execution_id}",
+            "manual_trigger": "/api/v1/events/incidents/{incident_id}/analyze",
+            "sync_existing": "/api/v1/events/github/sync-existing-issues"
+        },
+        "default_contract": "contract_6b65228aeb64",
         "timestamp": datetime.utcnow().isoformat()
     }
 
