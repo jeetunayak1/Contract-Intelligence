@@ -15,7 +15,7 @@ from app.models.contract_models import (
     ExtractedContract
 )
 from app.utils.document_parser import DocumentParser, DocumentParsingError
-from app.agents.contract_agent import get_contract_agent, ContractAgentError
+from app.agents.contract_agent_feature import get_contract_agent, ContractAgentError
 from app.services.firestore_service import get_firestore_service, FirestoreServiceError
 from app.core.config import settings
 

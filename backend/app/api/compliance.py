@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 
-from ..agents.compliance_agent import get_compliance_agent
+from ..agents.compliance_agent_feature import get_compliance_agent
 from ..services.contract_firestore import get_contract_firestore
 from ..services.pagerduty_service import get_pagerduty_service
 from ..services.jira_service import get_jira_service

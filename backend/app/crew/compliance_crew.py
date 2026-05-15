@@ -29,7 +29,7 @@ from app.models.event_models import (
     CrewEvent, CrewEventType, ReasoningLog, ReasoningLogLevel,
     FinancialExposureSnapshot
 )
-from app.agents.compliance_agent import get_compliance_agent
+from app.agents.compliance_agent_feature import get_compliance_agent
 
 logger = logging.getLogger(__name__)
 
