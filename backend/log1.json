@@ -1,0 +1,140 @@
+{
+    "success": true,
+    "contract_id": "contract_6debf8667ba6",
+    "filename": "SOW_Persistent_Systems_MultiYear.docx",
+    "data": {
+        "contract_metadata": {
+            "contract_id": null,
+            "client_name": "Client",
+            "provider_name": "Persistent Systems Limited",
+            "effective_date": null,
+            "end_date": null,
+            "contract_period_years": 0,
+            "contract_value": 0,
+            "currency": "USD"
+        },
+        "incident_slas": [
+            {
+                "priority": "P1",
+                "acknowledge_minutes": null,
+                "workaround_hours": null,
+                "resolution_hours": null,
+                "rca_deadline_hours": 4.0,
+                "availability_window": "On-call rotation"
+            },
+            {
+                "priority": "P2",
+                "acknowledge_minutes": null,
+                "workaround_hours": null,
+                "resolution_hours": null,
+                "rca_deadline_hours": null,
+                "availability_window": "On-call rotation"
+            }
+        ],
+        "availability_slas": [
+            {
+                "tier": "Production",
+                "target_uptime_percent": null,
+                "max_downtime_minutes": null,
+                "measurement_tool": "Datadog, Prometheus/Grafana",
+                "measurement_period": "Monthly"
+            }
+        ],
+        "quality_kpis": [
+            {
+                "metric": "Unit Test Coverage",
+                "target_percent": 80.0,
+                "target_value": null,
+                "measurement_frequency": "Per Sprint"
+            }
+        ],
+        "service_credits": [],
+        "liability_exclusions": [
+            "development_of_new_applications_not_in_schedule_a",
+            "data_migration_from_legacy_systems",
+            "third_party_software_procurement",
+            "infrastructure_provisioning",
+            "cloud_account_management",
+            "finops_activities",
+            "business_analysis_functions",
+            "product_owner_functions",
+            "penetration_testing",
+            "red_team_exercises",
+            "external_security_audits",
+            "infrastructure_hosting",
+            "cloud_cost_management",
+            "network_administration",
+            "end_user_device_support",
+            "vpn_management",
+            "desktop_it",
+            "compliance_audits",
+            "regulatory_filings",
+            "legal_advisory_services"
+        ],
+        "governance_rules": [
+            {
+                "meeting": "Agile / Scrum ceremonies",
+                "frequency": "Daily/Sprintly",
+                "participants": [
+                    "Scrum Team"
+                ],
+                "deliverables": [
+                    "Sprint Planning",
+                    "Daily Standups",
+                    "Sprint Reviews",
+                    "Retrospectives"
+                ]
+            },
+            {
+                "meeting": "Weekly Operational Metrics Review",
+                "frequency": "Weekly",
+                "participants": null,
+                "deliverables": [
+                    "Weekly Operational Metrics Report"
+                ]
+            },
+            {
+                "meeting": "Monthly Service Review",
+                "frequency": "Monthly",
+                "participants": null,
+                "deliverables": [
+                    "Monthly Service Review Pack",
+                    "Capacity planning reports"
+                ]
+            },
+            {
+                "meeting": "Timesheet Submission",
+                "frequency": "Weekly",
+                "participants": [
+                    "Billable Resources"
+                ],
+                "deliverables": [
+                    "Tagged Timesheets"
+                ]
+            }
+        ],
+        "escalation_matrix": [
+            {
+                "level": "Delivery Manager",
+                "trigger": "Scope dispute query",
+                "response_sla": "3 Business Days",
+                "contact_role": "Service Provider Delivery Manager"
+            },
+            {
+                "level": "Joint Steering Committee (JSC)",
+                "trigger": "Unresolved scope dispute",
+                "response_sla": "5 Business Days",
+                "contact_role": "JSC"
+            }
+        ]
+    },
+    "llm_metadata": {
+        "model": "gemini-3-flash-preview",
+        "method": "gemini",
+        "success": true,
+        "error": null,
+        "response_length": 3153
+    },
+    "extraction_status": "completed_with_warnings",
+    "message": "Contract uploaded and processed successfully"
+}

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { ThemeProvider, createTheme, CssBaseline, Box, AppBar, Toolbar, Typography, Drawer, List, ListItem, ListItemIcon, ListItemText, ListItemButton, IconButton } from '@mui/material';
-import { Dashboard as DashboardIcon, Description, Assessment, Warning, Notifications, Analytics as AnalyticsIcon, Security as SecurityIcon, Settings as SettingsIcon, Menu as MenuIcon, ChevronLeft, Visibility, GitHub as GitHubIcon } from '@mui/icons-material';
+import { Dashboard as DashboardIcon, Description, Assessment, Warning, Notifications, Analytics as AnalyticsIcon, Security as SecurityIcon, Settings as SettingsIcon, Menu as MenuIcon, ChevronLeft, Visibility, GitHub as GitHubIcon, Gavel, Shield } from '@mui/icons-material';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
@@ -11,6 +11,8 @@ import LiveMonitoring from './pages/LiveMonitoring';
 import GitHubConfiguration from './pages/GitHubConfiguration';
 import Settings from './pages/Settings';
 import AdminDemoData from './pages/AdminDemoData';
+import ContractIntelligence from './pages/ContractIntelligence';
+import WarRoom from './pages/WarRoom';
 
 const theme = createTheme({
   palette: {
@@ -81,6 +83,8 @@ const menuItems = [
   { text: 'Command Center', icon: <DashboardIcon />, path: '/' },
   { text: 'Transformation Hub', icon: <Description />, path: '/sows' },
   { text: 'Live Monitoring', icon: <Visibility />, path: '/monitoring' },
+  { text: 'Contract Intelligence', icon: <Gavel />, path: '/contracts' },
+  { text: 'AI War Room', icon: <Shield />, path: '/warroom' },
   { text: 'GitHub Configuration', icon: <GitHubIcon />, path: '/github-config' },
   { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
 ];
@@ -168,6 +172,8 @@ function App() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/sows" element={<TransformationHub />} />
               <Route path="/monitoring" element={<LiveMonitoring />} />
+              <Route path="/contracts" element={<ContractIntelligence />} />
+              <Route path="/warroom" element={<WarRoom />} />
               <Route path="/github-config" element={<GitHubConfiguration />} />
               <Route path="/settings" element={<Settings />} />
               {/* Hidden admin route - not in menu */}

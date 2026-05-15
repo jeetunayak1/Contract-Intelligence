@@ -76,6 +76,10 @@ class Settings(BaseSettings):
     GITHUB_TOKEN: str = ""
     GITHUB_OWNER: str = ""
     GITHUB_REPO: str = ""
+    GITHUB_ACCESS_TOKEN: str = ""  # Personal access token for API
+    GITHUB_REPO_NAME: str = ""  # Format: "owner/repo"
+    GITHUB_WEBHOOK_SECRET: str = ""  # Secret for webhook signature verification
+    DEFAULT_CONTRACT_ID: str = "contract_6b65228aeb64"  # Default contract for analysis
     
     # Slack Integration
     SLACK_BOT_TOKEN: str = ""
