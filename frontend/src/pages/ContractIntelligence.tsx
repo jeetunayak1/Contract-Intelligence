@@ -15,6 +15,12 @@ import {
   Tabs,
   Typography,
   Avatar,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  IconButton,
 } from '@mui/material';
 import {
   CloudUpload,
@@ -26,6 +32,7 @@ import {
   CalendarMonth,
   DoneAll,
   Warning,
+  Delete,
 } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 
@@ -88,6 +95,9 @@ const ContractIntelligence: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStep, setUploadStep] = useState('');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [contractToDelete, setContractToDelete] = useState<Contract | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     void loadContracts();
@@ -163,6 +173,51 @@ const ContractIntelligence: React.FC = () => {
       setUploadProgress(0);
       setUploadStep('');
     }
+  };
+
+  const handleDeleteClick = (contract: Contract, event: React.MouseEvent) => {
+    event.stopPropagation(); // Prevent contract selection
+    setContractToDelete(contract);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!contractToDelete) return;
+
+    setDeleting(true);
+    try {
+      const response = await fetch(`${API_BASE}/${contractToDelete.contract_id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Failed to delete contract');
+      }
+
+      toast.success('Contract deleted successfully!');
+      
+      // If the deleted contract was selected, clear selection
+      if (selectedContract?.contract_id === contractToDelete.contract_id) {
+        setSelectedContract(null);
+      }
+      
+      // Reload contracts list
+      await loadContracts();
+      
+    } catch (error) {
+      console.error(error);
+      toast.error(error instanceof Error ? error.message : 'Failed to delete contract');
+    } finally {
+      setDeleting(false);
+      setDeleteDialogOpen(false);
+      setContractToDelete(null);
+    }
+  };
+
+  const handleDeleteCancel = () => {
+    setDeleteDialogOpen(false);
+    setContractToDelete(null);
   };
 
   const renderRiskChip = (priority?: string) => {
@@ -284,21 +339,38 @@ const ContractIntelligence: React.FC = () => {
                   bgcolor: selectedContract?.contract_id === contract.contract_id ? 'rgba(0, 230, 118, 0.05)' : 'rgba(255,255,255,0.02)',
                   border: selectedContract?.contract_id === contract.contract_id ? '1px solid #00e676' : '1px solid rgba(255,255,255,0.05)',
                   transition: 'all 0.2s',
-                  '&:hover': { bgcolor: 'rgba(255,255,255,0.05)' }
+                  '&:hover': { bgcolor: 'rgba(255,255,255,0.05)' },
+                  position: 'relative'
                 }}
               >
-                <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
-                  {contract.extracted_data.contract_metadata.client_name}
-                </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
-                  {contract.filename}
-                </Typography>
-                <Chip
-                  size="small"
-                  label={contract.extraction_status}
-                  color="success"
-                  sx={{ fontWeight: 900, fontSize: '0.6rem', height: 18 }}
-                />
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+                      {contract.extracted_data.contract_metadata.client_name}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+                      {contract.filename}
+                    </Typography>
+                    <Chip
+                      size="small"
+                      label={contract.extraction_status}
+                      color="success"
+                      sx={{ fontWeight: 900, fontSize: '0.6rem', height: 18 }}
+                    />
+                  </Box>
+                  <IconButton
+                    size="small"
+                    onClick={(e) => handleDeleteClick(contract, e)}
+                    sx={{
+                      color: 'error.main',
+                      '&:hover': {
+                        bgcolor: 'rgba(255, 23, 68, 0.1)',
+                      }
+                    }}
+                  >
+                    <Delete fontSize="small" />
+                  </IconButton>
+                </Box>
               </Box>
             ))}
           </Stack>
@@ -508,6 +580,51 @@ const ContractIntelligence: React.FC = () => {
           )}
         </Grid>
       </Grid>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={handleDeleteCancel}
+        PaperProps={{
+          sx: {
+            bgcolor: 'rgba(20, 20, 24, 0.95)',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: 3,
+          }
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>
+          Delete Contract
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ color: 'text.secondary' }}>
+            Are you sure you want to delete the contract for{' '}
+            <strong style={{ color: '#00e676' }}>
+              {contractToDelete?.extracted_data.contract_metadata.client_name}
+            </strong>
+            ? This action cannot be undone and will permanently remove the contract from the database.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions sx={{ p: 3, pt: 0 }}>
+          <Button
+            onClick={handleDeleteCancel}
+            disabled={deleting}
+            sx={{ textTransform: 'none', fontWeight: 700 }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleDeleteConfirm}
+            variant="contained"
+            color="error"
+            disabled={deleting}
+            sx={{ textTransform: 'none', fontWeight: 700 }}
+          >
+            {deleting ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };
