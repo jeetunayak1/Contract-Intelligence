@@ -326,29 +326,44 @@ class MonitoringAgent:
             List of scope creep detections
         """
         scope_creep_items = []
-        
-        # TODO: Implement actual scope creep detection
-        # For demo, return sample data
-        demo_scope_creep = {
-            "description": "Advanced Analytics Dashboard",
-            "hours_spent": 40,
-            "cost": 10000,
-            "team_members": ["Developer A", "Developer B"],
-            "github_commits": 45,
-            "jira_tickets": ["ACME-789", "ACME-790"]
-        }
-        
+
+        github_commits = github_data.get("commit_count", 0) or len(github_data.get("commits", []))
+        jira_ticket_count = jira_data.get("ticket_count", 0) or len(jira_data.get("tickets", []))
+        extra_hours = github_data.get("hours_spent", 0) or jira_data.get("hours_spent", 0) or 0
+        detected_work = github_data.get("detected_work") or jira_data.get("detected_work") or ""
+
+        if not any([github_commits, jira_ticket_count, extra_hours, detected_work]):
+            return []
+
+        revenue_estimate = float(
+            github_data.get("potential_revenue")
+            or jira_data.get("potential_revenue")
+            or github_data.get("cost")
+            or jira_data.get("cost")
+            or extra_hours * 250
+            or 0
+        )
+
+        summary_description = detected_work or "Additional delivery work detected outside baseline SOW scope"
+
         scope_creep_doc = create_scope_creep_document(
             sow_id=sow_id,
-            detected_work=demo_scope_creep,
+            detected_work={
+                "description": summary_description,
+                "hours_spent": extra_hours,
+                "cost": github_data.get("cost") or jira_data.get("cost") or revenue_estimate,
+                "team_members": github_data.get("team_members", []) or jira_data.get("team_members", []),
+                "github_commits": github_commits,
+                "jira_tickets": jira_data.get("tickets", []),
+            },
             sow_match=None,
-            recommendation="Create Change Request CR-2024-05 for $15,000",
-            potential_revenue=15000,
+            recommendation=f"Validate scope change and consider recovery of ${revenue_estimate:,.0f}" if revenue_estimate else "Validate scope change and assess commercial recovery",
+            potential_revenue=revenue_estimate,
             status="detected"
         )
-        
+
         scope_creep_items.append(scope_creep_doc)
-        
+
         return scope_creep_items
     
     def _get_demo_obligations(self, sow_id: str) -> List[Dict[str, Any]]:

@@ -42,11 +42,12 @@ class Settings(BaseSettings):
     CLOUDANT_API_KEY: str = ""
     CLOUDANT_DB_NAME: str = "contract-intelligence"
     
-    # Google Cloud Platform (Firestore & Gemini)
+    # Google Cloud Platform (Firestore) + Google AI SDK (Gemini)
     GCP_PROJECT_ID: str = ""
     GCP_LOCATION: str = "us-central1"
     FIRESTORE_DB_NAME: str = "(default)"
     GEMINI_MODEL_ID: str = "gemini-1.5-pro-002"
+    GOOGLE_API_KEY: str = ""
     
     # IBM watsonx.ai
     WATSONX_API_KEY: str = ""
@@ -75,6 +76,10 @@ class Settings(BaseSettings):
     GITHUB_TOKEN: str = ""
     GITHUB_OWNER: str = ""
     GITHUB_REPO: str = ""
+    GITHUB_ACCESS_TOKEN: str = ""  # Personal access token for API
+    GITHUB_REPO_NAME: str = ""  # Format: "owner/repo"
+    GITHUB_WEBHOOK_SECRET: str = ""  # Secret for webhook signature verification
+    DEFAULT_CONTRACT_ID: str = "contract_6b65228aeb64"  # Default contract for analysis
     
     # Slack Integration
     SLACK_BOT_TOKEN: str = ""

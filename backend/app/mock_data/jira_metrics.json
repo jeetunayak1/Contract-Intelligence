@@ -1,0 +1,54 @@
+{
+  "sprint_metrics": {
+    "current_sprint": "Sprint 24",
+    "sprint_velocity": 42,
+    "sprint_velocity_variance": 28.5,
+    "committed_points": 45,
+    "completed_points": 38,
+    "sprint_goal_achievement": 84.4
+  },
+  "quality_metrics": {
+    "unit_test_coverage": 72.3,
+    "code_review_coverage": 91.2,
+    "critical_bug_escape_count": 3,
+    "high_bug_escape_count": 7,
+    "defect_density": 4.5,
+    "code_quality_score": 7.8,
+    "technical_debt_ratio": 12.3,
+    "security_vulnerabilities_critical": 1,
+    "security_vulnerabilities_high": 2,
+    "documentation_completeness": 88.5
+  },
+  "performance_metrics": {
+    "api_response_time_p95": 245,
+    "api_response_time_p99": 890,
+    "error_rate_percent": 0.8,
+    "availability_tier1": 99.87,
+    "availability_tier2": 99.45,
+    "availability_tier3": 96.2
+  },
+  "delivery_metrics": {
+    "deployment_frequency": 12,
+    "lead_time_hours": 18.5,
+    "change_failure_rate": 8.2,
+    "mean_time_to_recovery_hours": 2.3
+  },
+  "customer_satisfaction": {
+    "csat_score": 3.2,
+    "nps_score": 28,
+    "support_ticket_resolution_time_hours": 14.5,
+    "escalation_rate": 5.8
+  },
+  "resource_utilization": {
+    "team_capacity_utilization": 87.5,
+    "billable_hours_percentage": 82.3,
+    "overtime_hours": 45,
+    "team_size": 12
+  },
+  "compliance_metrics": {
+    "timesheet_submission_rate": 94.2,
+    "code_review_completion_rate": 98.5,
+    "documentation_update_rate": 76.8,
+    "security_scan_completion_rate": 100
+  }
+}

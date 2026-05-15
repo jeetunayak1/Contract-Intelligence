@@ -101,8 +101,9 @@ def create_sow_document(
     Returns:
         SOW document dictionary
     """
+    upload_suffix = kwargs.get("upload_id") or str(uuid.uuid4())[:8]
     doc = {
-        "_id": kwargs.get("_id", f"SOW-{sow_number}"),
+        "_id": kwargs.get("_id", f"SOW-{sow_number}-{upload_suffix}"),
         "type": "sow",
         "sow_number": sow_number,
         "client_name": client_name,
