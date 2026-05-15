@@ -13,6 +13,7 @@ from ..services.pagerduty_service import get_pagerduty_service
 from ..services.jira_service import get_jira_service
 from ..models.contract_models import ExtractedContract
 from ..models.compliance_models import ComplianceRequest
+from ..utils.contract_helpers import get_default_contract_id
 
 logger = logging.getLogger(__name__)
 
@@ -294,5 +295,95 @@ async def list_contracts():
             status_code=500,
             detail=f"Failed to list contracts: {str(e)}"
         )
+
+
+@router.post("/analyze/breaches")
+async def run_breach_detection(
+    contract_id: Optional[str] = Query(None, description="Contract ID to analyze (optional - will auto-fetch if not provided)"),
+    monthly_fee: float = Query(100000.0, description="Monthly contract value")
+):
+    """
+    Run deterministic SLA breach detection
+    
+    Uses Compliance Engine for pure mechanical comparison
+    NO AI reasoning - returns standardized breach report
+    
+    If contract_id is not provided, automatically uses first available contract from database
+    """
+    try:
+        # Get contract_id dynamically if not provided
+        if not contract_id:
+            logger.info("No contract_id provided, fetching first available contract...")
+            contract_id = await get_default_contract_id()
+            
+            if not contract_id:
+                raise HTTPException(
+                    status_code=404,
+                    detail="No contracts available in database. Please upload a contract first."
+                )
+            
+            logger.info(f"Using contract: {contract_id}")
+        
+        logger.info(f"Starting deterministic breach detection for contract: {contract_id}")
+        
+        # Run deterministic analysis
+        agent = get_compliance_agent()
+        report = await agent.analyze_with_engine(
+            contract_id=contract_id,
+            monthly_fee=monthly_fee
+        )
+        
+        logger.info(f"Breach detection completed: {report.report_id}")
+        logger.info(f"Status: {report.overall_status}, Breaches: {report.breach_summary.total_breaches}")
+        
+        return report.model_dump(mode='json')
+        
+    except HTTPException:
+        raise
+    except ValueError as e:
+        # Contract not found
+        raise HTTPException(
+            status_code=404,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Breach detection failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to run breach detection: {str(e)}"
+        )
+
+
+@router.get("/breaches/summary")
+async def get_breach_summary(
+    contract_id: str = Query(..., description="Contract ID")
+):
+    """
+    Get breach summary for a contract
+    
+    Quick summary without full analysis
+    """
+    try:
+        # Run analysis
+        agent = get_compliance_agent()
+        report = await agent.analyze_with_engine(contract_id=contract_id)
+        
+        return {
+            "success": True,
+            "contract_id": contract_id,
+            "overall_status": report.overall_status,
+            "breach_summary": report.breach_summary.model_dump(),
+            "total_slas_checked": report.total_slas_checked,
+            "total_incidents_analyzed": report.total_incidents_analyzed,
+            "analysis_duration_seconds": report.analysis_duration_seconds
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get breach summary: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get breach summary: {str(e)}"
+        )
+
 
 # Made with Bob

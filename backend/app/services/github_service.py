@@ -284,6 +284,210 @@ class GitHubService:
     def is_connected(self) -> bool:
         """Check if GitHub service is connected"""
         return self.github is not None and self.repo is not None
+    
+    # ========================================================================
+    # OPERATIONAL METRICS
+    # ========================================================================
+    
+    def fetch_issue_metrics(
+        self,
+        labels: Optional[List[str]] = None,
+        days: int = 30
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetch operational metrics from GitHub issues in IncidentMetrics format
+        
+        Args:
+            labels: Filter by labels (e.g., ['incident', 'bug'])
+            days: Number of days to look back
+            
+        Returns:
+            List of incident metrics compatible with IncidentMetrics model
+        """
+        if not self.repo:
+            logger.warning("GitHub repo not configured")
+            return []
+        
+        try:
+            from datetime import datetime, timedelta
+            
+            since = datetime.utcnow() - timedelta(days=days)
+            
+            issues = self.repo.get_issues(
+                state='all',
+                labels=labels or [],
+                since=since,
+                sort='created',
+                direction='desc'
+            )
+            
+            metrics = []
+            for issue in issues:
+                if issue.pull_request:  # Skip PRs
+                    continue
+                
+                # Calculate resolution time
+                resolution_hours = None
+                if issue.closed_at and issue.created_at:
+                    delta = issue.closed_at - issue.created_at
+                    resolution_hours = delta.total_seconds() / 3600
+                
+                # Determine priority from labels
+                priority = None
+                for label in issue.labels:
+                    label_name = label.name.upper()
+                    if label_name in ['P1', 'P2', 'P3', 'P4', 'P5']:
+                        priority = label_name
+                        break
+                
+                # Skip if no priority (not an incident)
+                if not priority:
+                    continue
+                
+                # Extract service from labels (look for service-* labels)
+                service = "unknown-service"
+                label_names = [l.name.lower() for l in issue.labels]
+                for label_name in label_names:
+                    if label_name.startswith('service-'):
+                        service = label_name.replace('service-', '')
+                        break
+                    # Also check for common service names
+                    elif label_name in ['payments-api', 'order-processing', 'notification-service',
+                                       'reporting-service', 'auth-service', 'api-gateway']:
+                        service = label_name
+                        break
+                
+                # Parse affected users from issue body
+                affected_users = 0
+                if issue.body:
+                    import re
+                    # Look for patterns like "affecting 12000 users" or "12,000 users affected"
+                    match = re.search(r'(\d+[,\d]*)\s*users?\s*(affected|impacted)', issue.body.lower())
+                    if match:
+                        affected_users = int(match.group(1).replace(',', ''))
+                
+                # Format for IncidentMetrics model
+                metrics.append({
+                    'incident_id': f"GH-{issue.number}",
+                    'priority': priority,
+                    'service': service,
+                    'created_at': issue.created_at.isoformat() if issue.created_at else datetime.utcnow().isoformat(),
+                    'resolved_at': issue.closed_at.isoformat() if issue.closed_at else None,
+                    'acknowledged_at': None,  # GitHub doesn't track this
+                    'workaround_at': None,  # GitHub doesn't track this
+                    'resolution_hours': resolution_hours,
+                    'acknowledge_minutes': None,
+                    'workaround_hours': None,
+                    'affected_users': affected_users,
+                    'downtime_minutes': None
+                })
+            
+            logger.info(f"Fetched metrics for {len(metrics)} GitHub incidents (filtered by priority)")
+            return metrics
+            
+        except Exception as e:
+            logger.error(f"Failed to fetch issue metrics: {e}")
+            return []
+    
+    def fetch_pr_metrics(self, days: int = 30) -> Dict[str, Any]:
+        """
+        Fetch PR review and merge metrics
+        
+        Args:
+            days: Number of days to look back
+            
+        Returns:
+            PR metrics summary
+        """
+        if not self.repo:
+            logger.warning("GitHub repo not configured")
+            return {}
+        
+        try:
+            from datetime import datetime, timedelta
+            
+            since = datetime.utcnow() - timedelta(days=days)
+            
+            pulls = self.repo.get_pulls(
+                state='all',
+                sort='created',
+                direction='desc'
+            )
+            
+            total_prs = 0
+            merged_prs = 0
+            total_review_time = 0
+            reviewed_prs = 0
+            
+            for pr in pulls:
+                if pr.created_at < since:
+                    break
+                
+                total_prs += 1
+                
+                if pr.merged:
+                    merged_prs += 1
+                    
+                    # Calculate review time
+                    if pr.created_at and pr.merged_at:
+                        delta = pr.merged_at - pr.created_at
+                        review_hours = delta.total_seconds() / 3600
+                        total_review_time += review_hours
+                        reviewed_prs += 1
+            
+            avg_review_hours = total_review_time / reviewed_prs if reviewed_prs > 0 else 0
+            merge_rate = (merged_prs / total_prs * 100) if total_prs > 0 else 0
+            
+            return {
+                'total_prs': total_prs,
+                'merged_prs': merged_prs,
+                'merge_rate_percent': round(merge_rate, 1),
+                'avg_review_hours': round(avg_review_hours, 1),
+                'period_days': days
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to fetch PR metrics: {e}")
+            return {}
+    
+    def fetch_deployment_metrics(self, days: int = 30) -> Dict[str, Any]:
+        """
+        Fetch deployment frequency metrics
+        
+        Args:
+            days: Number of days to look back
+            
+        Returns:
+            Deployment metrics
+        """
+        if not self.repo:
+            logger.warning("GitHub repo not configured")
+            return {}
+        
+        try:
+            from datetime import datetime, timedelta
+            
+            since = datetime.utcnow() - timedelta(days=days)
+            
+            # Count releases as deployments
+            releases = self.repo.get_releases()
+            
+            deployment_count = 0
+            for release in releases:
+                if release.created_at and release.created_at >= since:
+                    deployment_count += 1
+            
+            deployments_per_week = (deployment_count / days) * 7 if days > 0 else 0
+            
+            return {
+                'total_deployments': deployment_count,
+                'deployments_per_week': round(deployments_per_week, 1),
+                'period_days': days
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to fetch deployment metrics: {e}")
+            return {}
 
 
 # Singleton instance

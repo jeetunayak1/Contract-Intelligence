@@ -30,6 +30,7 @@ from app.models.event_models import (
     FinancialExposureSnapshot
 )
 from app.agents.compliance_agent_feature import get_compliance_agent
+from app.utils.contract_helpers import get_default_contract_id
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,7 @@ class ComplianceCrew:
     async def analyze_incident(
         self,
         incident_id: str,
-        contract_id: str,
+        contract_id: Optional[str] = None,
         monthly_fee: float = 100000.0
     ) -> Dict[str, Any]:
         """
@@ -69,7 +70,7 @@ class ComplianceCrew:
         
         Args:
             incident_id: Incident to analyze
-            contract_id: Contract with SLA obligations
+            contract_id: Contract with SLA obligations (optional - will auto-fetch if not provided)
             monthly_fee: Monthly contract fee for exposure calculation
             
         Returns:
@@ -92,6 +93,62 @@ class ComplianceCrew:
                 level=ReasoningLogLevel.INFO,
                 message=f"🤖 Compliance Crew {crew_execution_id} activated for incident {incident_id}"
             )
+            
+            # Get contract_id dynamically if not provided or if it doesn't exist
+            if not contract_id:
+                await self._add_reasoning_log(
+                    incident_id=incident_id,
+                    crew_execution_id=crew_execution_id,
+                    level=ReasoningLogLevel.INFO,
+                    message="🔍 No contract_id provided, fetching first available contract..."
+                )
+                contract_id = await get_default_contract_id()
+                
+                if not contract_id:
+                    raise ValueError("No contracts available in database. Please upload a contract first.")
+                
+                await self._add_reasoning_log(
+                    incident_id=incident_id,
+                    crew_execution_id=crew_execution_id,
+                    level=ReasoningLogLevel.INFO,
+                    message=f"✅ Using contract: {contract_id}"
+                )
+            else:
+                # Verify the provided contract exists
+                try:
+                    from app.services.contract_firestore import ContractFirestoreService
+                    contract_service = ContractFirestoreService()
+                    contract_doc = await contract_service.get_contract(contract_id)
+                    
+                    if not contract_doc:
+                        await self._add_reasoning_log(
+                            incident_id=incident_id,
+                            crew_execution_id=crew_execution_id,
+                            level=ReasoningLogLevel.WARNING,
+                            message=f"⚠️  Provided contract {contract_id} not found, fetching first available..."
+                        )
+                        contract_id = await get_default_contract_id()
+                        
+                        if not contract_id:
+                            raise ValueError("No contracts available in database. Please upload a contract first.")
+                        
+                        await self._add_reasoning_log(
+                            incident_id=incident_id,
+                            crew_execution_id=crew_execution_id,
+                            level=ReasoningLogLevel.INFO,
+                            message=f"✅ Using contract: {contract_id}"
+                        )
+                except Exception as e:
+                    await self._add_reasoning_log(
+                        incident_id=incident_id,
+                        crew_execution_id=crew_execution_id,
+                        level=ReasoningLogLevel.WARNING,
+                        message=f"⚠️  Error checking contract: {str(e)}, fetching first available..."
+                    )
+                    contract_id = await get_default_contract_id()
+                    
+                    if not contract_id:
+                        raise ValueError("No contracts available in database. Please upload a contract first.")
             
             await self._add_reasoning_log(
                 incident_id=incident_id,
@@ -549,6 +606,124 @@ class ComplianceCrew:
                 task="Financial Exposure Calculation"
             )
             raise
+    
+    async def analyze_with_deterministic_engine(
+        self,
+        contract_id: Optional[str] = None,
+        monthly_fee: float = 100000.0
+    ) -> Dict[str, Any]:
+        """
+        Run deterministic compliance analysis using Compliance Engine
+        NO AI reasoning - pure mechanical SLA comparison
+        
+        Args:
+            contract_id: Contract with SLA obligations (optional - will auto-fetch if not provided)
+            monthly_fee: Monthly contract fee (for context)
+            
+        Returns:
+            Breach report results
+        """
+        crew_execution_id = f"crew_{uuid.uuid4().hex[:8]}"
+        
+        try:
+            # Log crew start
+            await self._log_crew_event(
+                crew_execution_id=crew_execution_id,
+                incident_id="N/A",
+                event_type=CrewEventType.CREW_STARTED,
+                message="🔧 Starting deterministic compliance analysis"
+            )
+            
+            await self._add_reasoning_log(
+                incident_id="N/A",
+                crew_execution_id=crew_execution_id,
+                level=ReasoningLogLevel.INFO,
+                message=f"🤖 Deterministic Compliance Engine {crew_execution_id} activated"
+            )
+            
+            # Get contract_id dynamically if not provided
+            if not contract_id:
+                await self._add_reasoning_log(
+                    incident_id="N/A",
+                    crew_execution_id=crew_execution_id,
+                    level=ReasoningLogLevel.INFO,
+                    message="🔍 No contract_id provided, fetching first available contract..."
+                )
+                contract_id = await get_default_contract_id()
+                
+                if not contract_id:
+                    raise ValueError("No contracts available in database. Please upload a contract first.")
+                
+                await self._add_reasoning_log(
+                    incident_id="N/A",
+                    crew_execution_id=crew_execution_id,
+                    level=ReasoningLogLevel.INFO,
+                    message=f"✅ Using contract: {contract_id}"
+                )
+            
+            # Get compliance agent
+            compliance_agent = get_compliance_agent()
+            
+            # Run deterministic analysis
+            await self._add_reasoning_log(
+                incident_id="N/A",
+                crew_execution_id=crew_execution_id,
+                level=ReasoningLogLevel.INFO,
+                message="🔍 Running deterministic breach detection..."
+            )
+            
+            report = await compliance_agent.analyze_with_engine(
+                contract_id=contract_id,
+                monthly_fee=monthly_fee
+            )
+            
+            # Log results
+            await self._add_reasoning_log(
+                incident_id="N/A",
+                crew_execution_id=crew_execution_id,
+                level=ReasoningLogLevel.INFO,
+                message=f"✅ Analysis complete - Status: {report.overall_status}"
+            )
+            
+            await self._add_reasoning_log(
+                incident_id="N/A",
+                crew_execution_id=crew_execution_id,
+                level=ReasoningLogLevel.INFO,
+                message=f"📊 Total breaches: {report.breach_summary.total_breaches} "
+                       f"(Critical: {report.breach_summary.critical_breaches}, "
+                       f"High: {report.breach_summary.high_breaches})"
+            )
+            
+            # Log crew completion
+            await self._log_crew_event(
+                crew_execution_id=crew_execution_id,
+                incident_id="N/A",
+                event_type=CrewEventType.CREW_COMPLETED,
+                message="✅ Deterministic compliance analysis completed"
+            )
+            
+            return {
+                'success': True,
+                'crew_execution_id': crew_execution_id,
+                'report': report.model_dump(mode='json')
+            }
+            
+        except Exception as e:
+            logger.error(f"Deterministic analysis failed: {e}", exc_info=True)
+            
+            await self._log_crew_event(
+                crew_execution_id=crew_execution_id,
+                incident_id="N/A",
+                event_type=CrewEventType.CREW_FAILED,
+                message=f"❌ Analysis failed: {str(e)}",
+                error=str(e)
+            )
+            
+            return {
+                'success': False,
+                'crew_execution_id': crew_execution_id,
+                'error': str(e)
+            }
     
     async def _create_financial_snapshot(
         self,

@@ -19,6 +19,11 @@ from ..models.compliance_models import (
 )
 from ..services.pagerduty_service import get_pagerduty_service
 from ..services.jira_service import get_jira_service
+from ..services.github_service import get_github_service
+from ..services.compliance_engine import get_compliance_engine
+from ..services.contract_data_service import get_contract_data_service
+from ..models.breach_models import ComplianceBreachReport, IncidentMetrics
+from ..core.config import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +43,16 @@ class ComplianceAgent:
         if self.google_api_key:
             self._initialize_gemini()
         
+        # Initialize services
+        settings = Settings()
         self.pagerduty_service = get_pagerduty_service()
         self.jira_service = get_jira_service()
+        self.github_service = get_github_service(
+            access_token=settings.GITHUB_ACCESS_TOKEN,
+            repo_name=settings.GITHUB_REPO_NAME
+        )
+        self.compliance_engine = get_compliance_engine()
+        self.contract_service = get_contract_data_service()
         
         self.reasoning_stream: List[ReasoningStep] = []
     
@@ -726,6 +739,82 @@ Provide a 2-3 sentence executive summary focusing on key risks and liability exc
         
         except Exception as e:
             logger.error(f"Failed to generate AI summary: {e}")
+    
+    async def analyze_with_engine(
+        self,
+        contract_id: str,
+        monthly_fee: float = 100000.0
+    ) -> ComplianceBreachReport:
+        """
+        Run deterministic compliance analysis using Compliance Engine
+        NO AI reasoning - pure mechanical SLA comparison
+        
+        Args:
+            contract_id: Contract identifier
+            monthly_fee: Monthly contract value (for context only, not used in engine)
+            
+        Returns:
+            Standardized breach report
+        """
+        logger.info(f"🔧 Starting deterministic compliance analysis for contract {contract_id}")
+        
+        # 1. Fetch contract obligations
+        contract = await self.contract_service.get_extracted_contract(contract_id)
+        if not contract:
+            raise ValueError(f"Contract {contract_id} not found")
+        
+        logger.info(f"✅ Contract loaded: {contract.contract_metadata.client_name}")
+        logger.info(f"📊 SLAs: {len(contract.compliance_obligations.incident_slas)} incident, "
+                   f"{len(contract.compliance_obligations.availability_slas)} availability, "
+                   f"{len(contract.compliance_obligations.quality_kpis)} KPIs")
+        
+        # 2. Fetch operational metrics from GitHub (real data)
+        logger.info("📊 Fetching incident metrics from GitHub...")
+        incident_data = self.github_service.fetch_issue_metrics()
+        incidents = [IncidentMetrics(**inc) for inc in incident_data]
+        
+        logger.info(f"📈 Loaded {len(incidents)} incidents from GitHub")
+        
+        # 3. Get uptime metrics from GitHub deployment data
+        try:
+            deployment_metrics = self.github_service.fetch_deployment_metrics()
+            # Calculate uptime from deployment success rate
+            total_deployments = deployment_metrics.get('total_deployments', 0)
+            successful_deployments = deployment_metrics.get('successful_deployments', 0)
+            uptime_percent = (successful_deployments / total_deployments * 100) if total_deployments > 0 else 100.0
+            logger.info(f"🌐 Calculated uptime from deployments: {uptime_percent:.2f}%")
+        except Exception as e:
+            logger.warning(f"Failed to calculate uptime from GitHub: {e}, using default 99.0%")
+            uptime_percent = 99.0
+        
+        # 4. Get KPI metrics from Jira
+        kpi_metrics = {}
+        try:
+            jira_metrics = self.jira_service.load_metrics()
+            kpi_metrics = {
+                'unit_test_coverage': jira_metrics.quality_metrics.get('unit_test_coverage', 0),
+                'code_review_coverage': jira_metrics.quality_metrics.get('code_review_coverage', 0)
+            }
+            logger.info(f"📊 KPI Metrics: {kpi_metrics}")
+        except Exception as e:
+            logger.warning(f"Failed to load Jira metrics: {e}")
+        
+        # 5. Run deterministic breach detection
+        logger.info("🔍 Running deterministic breach detection...")
+        report = self.compliance_engine.detect_breaches(
+            contract=contract,
+            incidents=incidents,
+            uptime_percent=uptime_percent,
+            kpi_metrics=kpi_metrics
+        )
+        
+        logger.info(f"✅ Analysis complete: {report.overall_status}")
+        logger.info(f"📊 Total breaches: {report.breach_summary.total_breaches}")
+        logger.info(f"🚨 Critical: {report.breach_summary.critical_breaches}, "
+                   f"High: {report.breach_summary.high_breaches}, "
+                   f"Medium: {report.breach_summary.medium_breaches}")
+        
+        return report
 
 
 # Singleton instance

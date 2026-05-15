@@ -4,7 +4,7 @@ Loads and manages incident data
 """
 import json
 import os
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from pathlib import Path
 import logging
 
@@ -138,6 +138,82 @@ class PagerDutyService:
     def clear_cache(self):
         """Clear incidents cache"""
         self._incidents_cache = None
+    
+    def fetch_incident_metrics(self) -> List[Dict[str, Any]]:
+        """
+        Fetch operational metrics from PagerDuty incidents
+        Converts PagerDuty incidents to standardized metric format
+        
+        Returns:
+            List of incident metrics
+        """
+        incidents = self.load_incidents()
+        
+        metrics = []
+        for incident in incidents:
+            # Parse timestamps
+            from datetime import datetime
+            
+            created_at = incident.created_at
+            resolved_at = incident.resolved_at
+            
+            # Calculate durations
+            resolution_hours = incident.duration_hours
+            acknowledge_minutes = incident.acknowledged_minutes
+            workaround_hours = incident.workaround_hours
+            
+            metrics.append({
+                'incident_id': incident.incident_id,
+                'priority': incident.priority,
+                'service': incident.service,
+                'title': incident.title,
+                'created_at': created_at,
+                'resolved_at': resolved_at,
+                'acknowledged_at': None,  # Would need to calculate from acknowledged_minutes
+                'workaround_at': None,  # Would need to calculate from workaround_hours
+                'resolution_hours': resolution_hours,
+                'acknowledge_minutes': acknowledge_minutes,
+                'workaround_hours': workaround_hours,
+                'affected_users': incident.affected_users,
+                'downtime_minutes': resolution_hours * 60 if resolution_hours else None,
+                'root_cause': incident.root_cause,
+                'status': incident.status
+            })
+        
+        logger.info(f"Fetched metrics for {len(metrics)} PagerDuty incidents")
+        return metrics
+    
+    def get_uptime_metrics(self, service: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Calculate uptime metrics from incidents
+        
+        Args:
+            service: Filter by service name
+            
+        Returns:
+            Uptime metrics
+        """
+        incidents = self.load_incidents()
+        
+        if service:
+            incidents = [inc for inc in incidents if inc.service == service]
+        
+        # Calculate total downtime
+        total_downtime_hours = sum(inc.duration_hours for inc in incidents)
+        total_downtime_minutes = total_downtime_hours * 60
+        
+        # Assume 30-day period (43200 minutes)
+        period_minutes = 43200
+        uptime_minutes = period_minutes - total_downtime_minutes
+        uptime_percent = (uptime_minutes / period_minutes) * 100
+        
+        return {
+            'uptime_percent': round(uptime_percent, 2),
+            'downtime_minutes': round(total_downtime_minutes, 2),
+            'total_incidents': len(incidents),
+            'period_days': 30,
+            'service': service or 'all'
+        }
 
 
 # Singleton instance
