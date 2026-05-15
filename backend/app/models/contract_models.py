@@ -104,6 +104,78 @@ class ServiceCredit(BaseModel):
         return v
 
 
+class FinancialCap(BaseModel):
+    """Financial caps and aggregate limits"""
+    cap_type: str = Field(..., description="Type of cap (e.g., Aggregate Monthly Service Credit Cap)")
+    cap_percent: Optional[float] = Field(None, description="Cap as percentage")
+    cap_amount: Optional[float] = Field(None, description="Cap as fixed amount")
+    trigger_condition: Optional[str] = Field(None, description="Condition that triggers cap")
+    
+    @field_validator('cap_percent')
+    @classmethod
+    def validate_percent(cls, v):
+        if v is not None and v < 0:
+            raise ValueError('Percentage must be positive')
+        return v
+
+
+class CommercialPenalty(BaseModel):
+    """Commercial penalties and consequences"""
+    trigger: str = Field(..., description="What triggers this penalty")
+    consequence: str = Field(..., description="Penalty consequence")
+    penalty_percent: Optional[float] = Field(None, description="Penalty as percentage")
+    penalty_amount: Optional[float] = Field(None, description="Penalty as fixed amount")
+    
+    @field_validator('penalty_percent')
+    @classmethod
+    def validate_percent(cls, v):
+        if v is not None and v < 0:
+            raise ValueError('Percentage must be positive')
+        return v
+
+
+class RevenueControl(BaseModel):
+    """Revenue and billing controls"""
+    control: str = Field(..., description="Control name")
+    description: str = Field(..., description="Control description")
+    enforcement: Optional[str] = Field(None, description="How control is enforced")
+
+
+class ClientObligation(BaseModel):
+    """Client responsibilities and obligations"""
+    obligation: str = Field(..., description="Client obligation description")
+    sla_days: Optional[int] = Field(None, description="SLA timeframe in days")
+    consequence: Optional[str] = Field(None, description="Consequence of non-compliance")
+    
+    @field_validator('sla_days')
+    @classmethod
+    def validate_positive_int(cls, v):
+        if v is not None and v < 0:
+            raise ValueError('Value must be positive')
+        return v
+
+
+class TerminationClause(BaseModel):
+    """Contract termination clauses"""
+    termination_type: str = Field(..., description="Type of termination")
+    notice_period_days: Optional[int] = Field(None, description="Notice period in days")
+    conditions: Optional[str] = Field(None, description="Termination conditions")
+    
+    @field_validator('notice_period_days')
+    @classmethod
+    def validate_positive_int(cls, v):
+        if v is not None and v < 0:
+            raise ValueError('Value must be positive')
+        return v
+
+
+class LegalConstraint(BaseModel):
+    """Legal constraints and limitations"""
+    type: str = Field(..., description="Constraint type (e.g., Limitation of Liability)")
+    details: str = Field(..., description="Constraint details")
+    exclusions: Optional[List[str]] = Field(None, description="Exclusions from constraint")
+
+
 class GovernanceRule(BaseModel):
     """Governance and meeting requirements"""
     meeting: str = Field(..., description="Meeting name")
@@ -132,17 +204,74 @@ class ContractMetadata(BaseModel):
     currency: Optional[str] = Field("USD", description="Currency (e.g., USD)")
 
 
+class ComplianceObligations(BaseModel):
+    """Compliance and operational obligations"""
+    incident_slas: List[IncidentSLA] = Field(default_factory=list, description="Incident response SLAs")
+    availability_slas: List[AvailabilitySLA] = Field(default_factory=list, description="Uptime and availability SLAs")
+    quality_kpis: List[QualityKPI] = Field(default_factory=list, description="Quality and performance KPIs")
+    governance_rules: List[GovernanceRule] = Field(default_factory=list, description="Governance and meeting requirements")
+    escalation_rules: List[EscalationLevel] = Field(default_factory=list, description="Escalation matrix")
+
+
+class RiskObligations(BaseModel):
+    """Risk and financial obligations"""
+    service_credits: List[ServiceCredit] = Field(default_factory=list, description="Service credit terms")
+    financial_caps: List[FinancialCap] = Field(default_factory=list, description="Financial caps and limits")
+    commercial_penalties: List[CommercialPenalty] = Field(default_factory=list, description="Commercial penalties")
+    revenue_controls: List[RevenueControl] = Field(default_factory=list, description="Revenue and billing controls")
+
+
+class LiabilityObligations(BaseModel):
+    """Liability and legal obligations"""
+    liability_exclusions: List[str] = Field(default_factory=list, description="Liability exclusions")
+    client_obligations: List[ClientObligation] = Field(default_factory=list, description="Client responsibilities")
+    termination_clauses: List[TerminationClause] = Field(default_factory=list, description="Termination terms")
+    legal_constraints: List[LegalConstraint] = Field(default_factory=list, description="Legal constraints")
+
+
 class ExtractedContract(BaseModel):
-    """Complete extracted contract data structure"""
+    """Complete extracted contract data structure with categorized obligations"""
     contract_metadata: ContractMetadata
-    incident_slas: List[IncidentSLA] = Field(default_factory=list)
-    availability_slas: List[AvailabilitySLA] = Field(default_factory=list)
-    quality_kpis: List[QualityKPI] = Field(default_factory=list)
-    service_credits: List[ServiceCredit] = Field(default_factory=list)
-    liability_exclusions: List[str] = Field(default_factory=list)
-    governance_rules: List[GovernanceRule] = Field(default_factory=list)
-    escalation_matrix: List[EscalationLevel] = Field(default_factory=list)
+    compliance_obligations: ComplianceObligations = Field(default_factory=ComplianceObligations)
+    risk_obligations: RiskObligations = Field(default_factory=RiskObligations)
+    liability_obligations: LiabilityObligations = Field(default_factory=LiabilityObligations)
     additional_terms: Optional[Dict[str, Any]] = Field(None, description="Any additional terms")
+    
+    # Backward compatibility properties (deprecated - use categorized obligations)
+    @property
+    def incident_slas(self) -> List[IncidentSLA]:
+        """Backward compatibility: access incident_slas"""
+        return self.compliance_obligations.incident_slas
+    
+    @property
+    def availability_slas(self) -> List[AvailabilitySLA]:
+        """Backward compatibility: access availability_slas"""
+        return self.compliance_obligations.availability_slas
+    
+    @property
+    def quality_kpis(self) -> List[QualityKPI]:
+        """Backward compatibility: access quality_kpis"""
+        return self.compliance_obligations.quality_kpis
+    
+    @property
+    def service_credits(self) -> List[ServiceCredit]:
+        """Backward compatibility: access service_credits"""
+        return self.risk_obligations.service_credits
+    
+    @property
+    def liability_exclusions(self) -> List[str]:
+        """Backward compatibility: access liability_exclusions"""
+        return self.liability_obligations.liability_exclusions
+    
+    @property
+    def governance_rules(self) -> List[GovernanceRule]:
+        """Backward compatibility: access governance_rules"""
+        return self.compliance_obligations.governance_rules
+    
+    @property
+    def escalation_matrix(self) -> List[EscalationLevel]:
+        """Backward compatibility: access escalation_matrix"""
+        return self.compliance_obligations.escalation_rules
 
 
 class ContractDocument(BaseModel):

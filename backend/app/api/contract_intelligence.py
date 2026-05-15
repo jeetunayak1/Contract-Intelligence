@@ -38,8 +38,8 @@ async def upload_contract(
             tmp_file_path = tmp_file.name
         
         try:
-            # Extract contract data
-            agent = get_contract_agent()
+            # Extract contract data (force reload to get latest code)
+            agent = get_contract_agent(force_reload=True)
             result = await agent.extract_contract(
                 file_path=tmp_file_path,
                 filename=file.filename

@@ -15,7 +15,7 @@ from app.models.contract_models import (
     ExtractedContract
 )
 from app.utils.document_parser import DocumentParser, DocumentParsingError
-from app.agents.contract_agent_feature import get_contract_agent, ContractAgentError
+from app.agents.contract_agent_feature import get_contract_agent, reset_contract_agent, ContractAgentError
 from app.services.firestore_service import get_firestore_service, FirestoreServiceError
 from app.core.config import settings
 
@@ -76,9 +76,9 @@ async def upload_contract(
         # Generate contract ID
         contract_id = f"contract_{uuid.uuid4().hex[:12]}"
         
-        # Extract contract data using agent
+        # Extract contract data using agent (force reload to get latest code)
         try:
-            agent = get_contract_agent()
+            agent = get_contract_agent(force_reload=True)
             extracted_data = await agent.extract_contract(
                 contract_text=raw_text,
                 filename=file.filename,
@@ -317,6 +317,29 @@ async def delete_contract(contract_id: str):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An unexpected error occurred: {str(e)}"
+        )
+
+
+@router.post("/agent/reset")
+async def reset_agent():
+    """
+    Reset the contract agent singleton (useful after code updates)
+    
+    Returns:
+        Success message
+    """
+    try:
+        reset_contract_agent()
+        logger.info("Contract agent reset successfully")
+        return {
+            "success": True,
+            "message": "Contract agent reset successfully. Next upload will use updated code."
+        }
+    except Exception as e:
+        logger.error(f"Failed to reset agent: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to reset agent: {str(e)}"
         )
 
 

@@ -1,0 +1,275 @@
+{
+  "contract_metadata": {
+    "contract_id": "MSA-2024-001",
+    "client_name": "Acme Corporation",
+    "provider_name": "TechServices Inc",
+    "effective_date": "2024-01-01",
+    "end_date": "2026-12-31",
+    "contract_period_years": 3,
+    "contract_value": 5000000,
+    "currency": "USD"
+  },
+  "compliance_obligations": {
+    "incident_slas": [
+      {
+        "priority": "P1",
+        "acknowledge_minutes": 15,
+        "workaround_hours": 4,
+        "resolution_hours": 8,
+        "rca_deadline_hours": 48,
+        "availability_window": "24x7x365"
+      },
+      {
+        "priority": "P2",
+        "acknowledge_minutes": 30,
+        "workaround_hours": 8,
+        "resolution_hours": 24,
+        "rca_deadline_hours": 72,
+        "availability_window": "24x7x365"
+      },
+      {
+        "priority": "P3",
+        "acknowledge_minutes": 60,
+        "workaround_hours": null,
+        "resolution_hours": 72,
+        "rca_deadline_hours": null,
+        "availability_window": "Business Hours"
+      }
+    ],
+    "availability_slas": [
+      {
+        "tier": "Production",
+        "target_uptime_percent": 99.9,
+        "max_downtime_minutes": 43.2,
+        "measurement_tool": "Dynatrace",
+        "measurement_period": "Monthly"
+      },
+      {
+        "tier": "Non-Production",
+        "target_uptime_percent": 99.5,
+        "max_downtime_minutes": 216,
+        "measurement_tool": "Dynatrace",
+        "measurement_period": "Monthly"
+      }
+    ],
+    "quality_kpis": [
+      {
+        "metric": "First Call Resolution Rate",
+        "target_percent": 80,
+        "target_value": null,
+        "measurement_frequency": "Monthly"
+      },
+      {
+        "metric": "Customer Satisfaction Score",
+        "target_percent": 90,
+        "target_value": null,
+        "measurement_frequency": "Quarterly"
+      },
+      {
+        "metric": "Mean Time to Resolve (MTTR)",
+        "target_percent": null,
+        "target_value": "4 hours for P1",
+        "measurement_frequency": "Monthly"
+      }
+    ],
+    "governance_rules": [
+      {
+        "meeting": "Monthly Service Review",
+        "frequency": "Monthly",
+        "participants": ["Account Manager", "Technical Lead", "Client Stakeholder"],
+        "deliverables": ["Service Report", "SLA Dashboard", "Action Items"]
+      },
+      {
+        "meeting": "Quarterly Business Review",
+        "frequency": "Quarterly",
+        "participants": ["Executive Sponsor", "Program Manager", "Client Executive"],
+        "deliverables": ["Executive Summary", "Roadmap", "Budget Review"]
+      }
+    ],
+    "escalation_rules": [
+      {
+        "level": "L1",
+        "trigger": "Initial incident response",
+        "response_sla": "15 minutes",
+        "contact_role": "Service Desk"
+      },
+      {
+        "level": "L2",
+        "trigger": "L1 unable to resolve within 1 hour",
+        "response_sla": "30 minutes",
+        "contact_role": "Technical Support Engineer"
+      },
+      {
+        "level": "L3",
+        "trigger": "L2 unable to resolve or P1 incident",
+        "response_sla": "1 hour",
+        "contact_role": "Senior Engineer / Architect"
+      },
+      {
+        "level": "Management",
+        "trigger": "P1 incident exceeding 4 hours",
+        "response_sla": "Immediate",
+        "contact_role": "Service Delivery Manager"
+      }
+    ]
+  },
+  "risk_obligations": {
+    "service_credits": [
+      {
+        "priority": "P1",
+        "breach_condition": "Resolution SLA missed",
+        "credit_percent": 5,
+        "monthly_cap_percent": 20,
+        "calculation_method": "Per incident, cumulative monthly"
+      },
+      {
+        "priority": "P2",
+        "breach_condition": "Resolution SLA missed",
+        "credit_percent": 3,
+        "monthly_cap_percent": 20,
+        "calculation_method": "Per incident, cumulative monthly"
+      },
+      {
+        "priority": null,
+        "breach_condition": "Monthly uptime below 99.9%",
+        "credit_percent": 10,
+        "monthly_cap_percent": 20,
+        "calculation_method": "Per month"
+      }
+    ],
+    "financial_caps": [
+      {
+        "cap_type": "Aggregate Monthly Service Credit Cap",
+        "cap_percent": 20,
+        "cap_amount": null,
+        "trigger_condition": "Total service credits in any calendar month"
+      },
+      {
+        "cap_type": "Annual Service Credit Cap",
+        "cap_percent": 50,
+        "cap_amount": null,
+        "trigger_condition": "Total service credits in any contract year"
+      },
+      {
+        "cap_type": "Consecutive Month Cap",
+        "cap_percent": 20,
+        "cap_amount": null,
+        "trigger_condition": "Service credits in 3 consecutive months triggers review"
+      }
+    ],
+    "commercial_penalties": [
+      {
+        "trigger": "Critical Bug Escape to Production",
+        "consequence": "1% monthly fee reduction",
+        "penalty_percent": 1,
+        "penalty_amount": null
+      },
+      {
+        "trigger": "Unauthorized Change Implementation",
+        "consequence": "Rollback costs borne by provider",
+        "penalty_percent": null,
+        "penalty_amount": null
+      },
+      {
+        "trigger": "Data Breach due to Provider Negligence",
+        "consequence": "Immediate termination right + damages",
+        "penalty_percent": null,
+        "penalty_amount": null
+      }
+    ],
+    "revenue_controls": [
+      {
+        "control": "No-Code-No-Work Rule",
+        "description": "No billable work without approved work order or change request",
+        "enforcement": "Invoice rejection for unauthorized work"
+      },
+      {
+        "control": "Overtime Approval Requirement",
+        "description": "All overtime work requires prior written approval",
+        "enforcement": "Overtime charges rejected without approval"
+      },
+      {
+        "control": "Invoice Dispute Resolution",
+        "description": "Client has 30 days to dispute invoices with supporting documentation",
+        "enforcement": "Disputed amounts held pending resolution"
+      }
+    ]
+  },
+  "liability_obligations": {
+    "liability_exclusions": [
+      "Force majeure events (natural disasters, war, terrorism)",
+      "Client-caused outages or delays",
+      "Third-party service failures beyond provider control",
+      "Scheduled maintenance windows with proper notice",
+      "Client failure to provide required access or information",
+      "Changes requested by client that cause issues"
+    ],
+    "client_obligations": [
+      {
+        "obligation": "Provide infrastructure access and credentials",
+        "sla_days": 2,
+        "consequence": "Provider not liable for delays due to access issues"
+      },
+      {
+        "obligation": "Approve change requests within specified timeframe",
+        "sla_days": 5,
+        "consequence": "Automatic approval after 5 business days"
+      },
+      {
+        "obligation": "Provide timely feedback on deliverables",
+        "sla_days": 10,
+        "consequence": "Deliverable deemed accepted after 10 business days"
+      },
+      {
+        "obligation": "Maintain current contact information and escalation matrix",
+        "sla_days": null,
+        "consequence": "Provider not liable for communication failures"
+      }
+    ],
+    "termination_clauses": [
+      {
+        "termination_type": "Termination for Convenience",
+        "notice_period_days": 90,
+        "conditions": "Either party may terminate with 90 days written notice"
+      },
+      {
+        "termination_type": "Termination for Cause",
+        "notice_period_days": 30,
+        "conditions": "Material breach not cured within 30 days of written notice"
+      },
+      {
+        "termination_type": "Immediate Termination",
+        "notice_period_days": 0,
+        "conditions": "Bankruptcy, insolvency, or material data breach"
+      }
+    ],
+    "legal_constraints": [
+      {
+        "type": "Limitation of Liability",
+        "details": "Provider liability capped at 12 months of fees, excluding service credits",
+        "exclusions": ["Gross negligence", "Willful misconduct", "Data breach", "IP infringement"]
+      },
+      {
+        "type": "Governing Law",
+        "details": "Contract governed by laws of State of California, USA",
+        "exclusions": null
+      },
+      {
+        "type": "Confidentiality",
+        "details": "5-year confidentiality obligation for proprietary information",
+        "exclusions": ["Publicly available information", "Independently developed", "Required by law"]
+      },
+      {
+        "type": "Intellectual Property",
+        "details": "Client retains all IP rights to their data and systems",
+        "exclusions": ["Provider tools and methodologies", "Pre-existing IP"]
+      }
+    ]
+  },
+  "additional_terms": {
+    "insurance_requirements": "Provider must maintain $5M professional liability insurance",
+    "audit_rights": "Client may audit provider compliance annually with 30 days notice",
+    "subcontracting": "Provider may subcontract with prior written approval",
+    "data_retention": "Provider must retain records for 7 years post-termination"
+  }
+}

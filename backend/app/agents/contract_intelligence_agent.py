@@ -171,133 +171,12 @@ class ContractIntelligenceAgent:
             raise Exception(f"LLM extraction failed: {str(e)}")
     
     def _create_extraction_prompt(self, contract_text: str) -> str:
-        """Create extraction prompt for LLM"""
-        return f"""You are a Contract Intelligence Agent. Your task is to extract EVERY SINGLE SLA obligation, service credit, and compliance rule from the contract.
-
-CRITICAL: Extract ALL priorities (P1, P2, P3, P4, P5), ALL tiers, ALL service credits, ALL availability targets.
-Do NOT skip any data. If a table has 4 rows, extract all 4 rows. If there are service credits for P1-P4, extract all 4.
-
-Return ONLY valid JSON. No markdown, no explanations, no summaries.
-
-Extract into this exact schema:
-
-{{
-  "contract_metadata": {{
-    "contract_id": null,
-    "client_name": "extract from contract",
-    "provider_name": "extract from contract",
-    "effective_date": "YYYY-MM-DD or null",
-    "end_date": "YYYY-MM-DD or null",
-    "contract_period_years": null,
-    "contract_value": null,
-    "currency": "USD"
-  }},
-  "incident_slas": [
-    {{
-      "priority": "P1|P2|P3|P4|P5",
-      "acknowledge_minutes": 15,
-      "workaround_hours": 2.0,
-      "resolution_hours": 4.0,
-      "rca_deadline_hours": 24,
-      "availability_window": "24x7x365"
-    }}
-    // EXTRACT ALL PRIORITIES - if contract has P1, P2, P3, P4, create 4 entries
-  ],
-  "availability_slas": [
-    {{
-      "tier": "Tier 1 - Mission Critical",
-      "target_uptime_percent": 99.9,
-      "max_downtime_minutes": 43.8,
-      "measurement_tool": "Datadog",
-      "measurement_period": "Monthly"
-    }}
-    // EXTRACT ALL TIERS - if contract has Tier 1, Tier 2, Tier 3, create 3 entries
-  ],
-  "quality_kpis": [
-    {{
-      "metric": "Unit Test Coverage",
-      "target_percent": 80.0,
-      "target_value": null,
-      "measurement_frequency": "Per Sprint"
-    }}
-    // EXTRACT ALL KPIs from tables
-  ],
-  "service_credits": [
-    {{
-      "priority": "P1",
-      "breach_condition": "Resolution time exceeds 4 hours",
-      "credit_percent": 2.0,
-      "monthly_cap_percent": 10.0,
-      "calculation_method": "Per incident"
-    }}
-    // EXTRACT ALL SERVICE CREDITS - if table shows P1, P2, P3, P4 credits, create 4 entries
-    // Look for "Service Credit Schedule" tables
-  ],
-  "liability_exclusions": [
-    "extract_all_exclusions_from_contract"
-    // Extract from "Out of Scope" or "Exclusions" sections
-  ],
-  "governance_rules": [
-    {{
-      "meeting": "Weekly Operations Review",
-      "frequency": "Weekly",
-      "participants": ["Client PM", "Provider PM"],
-      "deliverables": ["Status Report"]
-    }}
-    // EXTRACT ALL governance meetings
-  ],
-  "escalation_matrix": [
-    {{
-      "level": "L1",
-      "trigger": "Issue not resolved within SLA",
-      "response_sla": "Same Business Day",
-      "contact_role": "Operations Manager"
-    }}
-    // EXTRACT ALL escalation levels
-  ]
-}}
-
-EXTRACTION INSTRUCTIONS:
-
-1. INCIDENT SLAs:
-   - Look for "Response & Resolution Time SLAs" or "Incident Priority Definitions" tables
-   - Extract EVERY priority level (P1, P2, P3, P4, P5)
-   - Include acknowledge time, workaround time, resolution time, RCA deadline
-   - Convert "Business Hours" to hours, "Business Days" to hours (8 hours/day)
-
-2. AVAILABILITY SLAs:
-   - Look for "System Availability SLAs" or "Uptime Targets" tables
-   - Extract ALL tiers (Tier 1, Tier 2, Tier 3, Production, Non-Production, etc.)
-   - Include target percentage, max downtime, measurement tools
-   - If percentage is missing but tier exists, set target_uptime_percent to null
-
-3. SERVICE CREDITS:
-   - Look for "Service Credit Schedule" or "SLA Breach" tables
-   - Extract EVERY row from the table
-   - Include priority, breach condition, credit percentage, monthly cap
-   - Look for both Incident SLA breaches AND Availability SLA breaches
-
-4. QUALITY KPIs:
-   - Look for "Quality Gate KPIs" or "Development Tower" metrics
-   - Extract ALL metrics from tables
-   - Include metric name, target percentage/value, measurement frequency
-
-5. LIABILITY EXCLUSIONS:
-   - Look for "Out of Scope", "Exclusions", "Not Included" sections
-   - Extract ALL items as a list of strings
-   - Use snake_case format (e.g., "third_party_software_procurement")
-
-NORMALIZATION RULES:
-- Time: "15 minutes" → 15, "2 hours" → 2.0, "4 Business Hours" → 4, "5 Business Days" → 40
-- Percentages: "99.9%" → 99.9, "80%" → 80.0
-- Priorities: "Critical" → "P1", "High" → "P2", "Medium" → "P3", "Low" → "P4"
-- Missing data: Use null, not empty string
-
-CRITICAL: Do NOT summarize or skip rows. If a table has 10 rows, extract all 10 rows.
-
-CONTRACT TEXT:
-{contract_text[:12000]}
-"""
+        """Create extraction prompt for LLM with CATEGORIZED schema"""
+        # Import the prompt from the centralized location
+        from app.prompts.contract_extraction_prompt import get_extraction_prompt
+        system_prompt, user_prompt = get_extraction_prompt(contract_text)
+        # Combine for this agent's format
+        return f"{system_prompt}\n\n{user_prompt}"
     
     def _extract_json_from_response(self, response_text: str) -> Dict[str, Any]:
         """Extract JSON from LLM response"""
@@ -323,12 +202,28 @@ CONTRACT TEXT:
 _contract_agent: Optional[ContractIntelligenceAgent] = None
 
 
-def get_contract_agent() -> ContractIntelligenceAgent:
-    """Get or create Contract Intelligence Agent singleton"""
+def get_contract_agent(force_reload: bool = False) -> ContractIntelligenceAgent:
+    """
+    Get or create Contract Intelligence Agent singleton
+    
+    Args:
+        force_reload: Force creation of new agent instance (useful after code updates)
+    
+    Returns:
+        ContractIntelligenceAgent instance
+    """
     global _contract_agent
-    if _contract_agent is None:
+    if _contract_agent is None or force_reload:
         _contract_agent = ContractIntelligenceAgent()
+        logger.info("Contract Intelligence Agent initialized/reloaded")
     return _contract_agent
+
+
+def reset_contract_agent():
+    """Reset the singleton agent instance"""
+    global _contract_agent
+    _contract_agent = None
+    logger.info("Contract Intelligence Agent reset")
 
 
 # Made with Bob

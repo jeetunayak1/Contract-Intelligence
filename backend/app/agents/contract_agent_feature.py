@@ -1,6 +1,7 @@
 """
 Contract Intelligence Agent using LangGraph
-Extracts SLA obligations and compliance rules from contracts
+Extracts and categorizes SLA obligations into compliance, risk, and liability buckets
+Supports multi-agent downstream processing (Compliance Agent, Risk Agent, Liability Agent)
 """
 import json
 import logging
@@ -38,7 +39,17 @@ class AgentState(TypedDict):
 
 class ContractIntelligenceAgent:
     """
-    LangGraph-based agent for contract intelligence extraction
+    LangGraph-based agent for contract intelligence extraction with categorized obligations.
+    
+    Extracts contract obligations into three categories:
+    1. Compliance Obligations: Operational SLAs, KPIs, governance rules, escalation procedures
+    2. Risk Obligations: Service credits, financial caps, commercial penalties, revenue controls
+    3. Liability Obligations: Liability exclusions, client obligations, termination clauses, legal constraints
+    
+    This categorization enables downstream multi-agent processing:
+    - Compliance Agent consumes compliance_obligations
+    - Risk Agent consumes risk_obligations
+    - Liability Agent consumes liability_obligations
     """
     
     def __init__(self):
@@ -49,7 +60,8 @@ class ContractIntelligenceAgent:
                 model=settings.GEMINI_MODEL_ID,
                 google_api_key=settings.GOOGLE_API_KEY,
                 temperature=0.0,  # Deterministic for structured extraction
-                max_output_tokens=8192
+                max_output_tokens=8192,
+                convert_system_message_to_human=True  # Required for Gemini API
             )
             
             # Build agent graph
@@ -135,8 +147,16 @@ class ContractIntelligenceAgent:
             # Invoke LLM
             response = self.llm.invoke(messages)
             
+            # Log raw response for debugging
+            logger.info(f"LLM Response length: {len(response.content)} chars")
+            logger.debug(f"LLM Raw response (first 500 chars): {response.content[:500]}")
+            
             # Extract JSON from response
             extracted_json = self._extract_json_from_response(response.content)
+            
+            # Log extracted JSON for debugging
+            logger.info(f"Extracted JSON length: {len(extracted_json)} chars")
+            logger.debug(f"Extracted JSON (first 500 chars): {extracted_json[:500]}")
             
             state['extracted_json'] = extracted_json
             logger.info(f"Successfully extracted JSON for contract {state['contract_id']}")
@@ -340,17 +360,31 @@ class ContractIntelligenceAgent:
 _contract_agent: Optional[ContractIntelligenceAgent] = None
 
 
-def get_contract_agent() -> ContractIntelligenceAgent:
+def get_contract_agent(force_reload: bool = False) -> ContractIntelligenceAgent:
     """
     Get or create Contract Intelligence Agent singleton
+    
+    Args:
+        force_reload: Force creation of new agent instance (useful after code updates)
     
     Returns:
         ContractIntelligenceAgent instance
     """
     global _contract_agent
-    if _contract_agent is None:
+    if _contract_agent is None or force_reload:
         _contract_agent = ContractIntelligenceAgent()
+        logger.info("Contract Intelligence Agent initialized/reloaded")
     return _contract_agent
+
+
+def reset_contract_agent():
+    """
+    Reset the singleton agent instance.
+    Call this after code updates to force reload.
+    """
+    global _contract_agent
+    _contract_agent = None
+    logger.info("Contract Intelligence Agent reset")
 
 
 # Made with Bob
