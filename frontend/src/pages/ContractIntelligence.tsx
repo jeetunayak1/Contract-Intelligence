@@ -67,15 +67,61 @@ interface ServiceCredit {
   monthly_cap_percent?: number;
 }
 
-interface ExtractedContract {
-  contract_metadata: ContractMetadata;
+interface ComplianceObligations {
   incident_slas: IncidentSLA[];
   availability_slas: AvailabilitySLA[];
-  service_credits: ServiceCredit[];
-  liability_exclusions: string[];
   quality_kpis: any[];
   governance_rules: any[];
-  escalation_matrix: any[];
+  escalation_rules: any[];
+}
+
+interface RiskObligations {
+  service_credits: ServiceCredit[];
+  financial_caps: any[];
+  commercial_penalties: any[];
+  revenue_controls: any[];
+}
+
+interface LiabilityExclusion {
+  exclusion_type: string;
+  description?: string;
+}
+
+interface ClientObligation {
+  obligation: string;
+  sla_days?: number;
+}
+
+interface TerminationClause {
+  termination_type: string;
+  notice_period_days?: number;
+}
+
+interface LegalConstraint {
+  type: string;
+  details: string;
+}
+
+interface LiabilityObligations {
+  liability_exclusions: LiabilityExclusion[];
+  client_obligations: ClientObligation[];
+  termination_clauses: TerminationClause[];
+  legal_constraints: LegalConstraint[];
+}
+
+interface ExtractedContract {
+  contract_metadata: ContractMetadata;
+  compliance_obligations: ComplianceObligations;
+  risk_obligations: RiskObligations;
+  liability_obligations: LiabilityObligations;
+  // Backward compatibility - these will be computed from categorized data
+  incident_slas?: IncidentSLA[];
+  availability_slas?: AvailabilitySLA[];
+  service_credits?: ServiceCredit[];
+  liability_exclusions?: string[];
+  quality_kpis?: any[];
+  governance_rules?: any[];
+  escalation_matrix?: any[];
 }
 
 interface Contract {
@@ -391,8 +437,8 @@ const ContractIntelligence: React.FC = () => {
               <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
                 <Tabs value={tab} onChange={(_, v) => setTab(v)} textColor="primary" indicatorColor="primary">
                   <Tab label="Overview" sx={{ fontWeight: 800, textTransform: 'none' }} />
-                  <Tab label={`Incident SLAs (${selectedContract.extracted_data.incident_slas.length})`} sx={{ fontWeight: 800, textTransform: 'none' }} />
-                  <Tab label={`Service Credits (${selectedContract.extracted_data.service_credits.length})`} sx={{ fontWeight: 800, textTransform: 'none' }} />
+                  <Tab label={`Incident SLAs (${selectedContract.extracted_data.compliance_obligations.incident_slas.length})`} sx={{ fontWeight: 800, textTransform: 'none' }} />
+                  <Tab label={`Service Credits (${selectedContract.extracted_data.risk_obligations.service_credits.length})`} sx={{ fontWeight: 800, textTransform: 'none' }} />
                 </Tabs>
               </Box>
 
@@ -447,7 +493,7 @@ const ContractIntelligence: React.FC = () => {
                     <Grid item xs={12} md={3}>
                       <Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3 }}>
                         <Typography variant="h3" sx={{ fontWeight: 900, color: 'primary.main' }}>
-                          {selectedContract.extracted_data.incident_slas.length}
+                          {selectedContract.extracted_data.compliance_obligations.incident_slas.length}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">Incident SLAs</Typography>
                       </Paper>
@@ -455,7 +501,7 @@ const ContractIntelligence: React.FC = () => {
                     <Grid item xs={12} md={3}>
                       <Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3 }}>
                         <Typography variant="h3" sx={{ fontWeight: 900, color: 'warning.main' }}>
-                          {selectedContract.extracted_data.availability_slas.length}
+                          {selectedContract.extracted_data.compliance_obligations.availability_slas.length}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">Availability SLAs</Typography>
                       </Paper>
@@ -463,7 +509,7 @@ const ContractIntelligence: React.FC = () => {
                     <Grid item xs={12} md={3}>
                       <Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3 }}>
                         <Typography variant="h3" sx={{ fontWeight: 900, color: 'secondary.main' }}>
-                          {selectedContract.extracted_data.service_credits.length}
+                          {selectedContract.extracted_data.risk_obligations.service_credits.length}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">Service Credits</Typography>
                       </Paper>
@@ -471,7 +517,7 @@ const ContractIntelligence: React.FC = () => {
                     <Grid item xs={12} md={3}>
                       <Paper sx={{ p: 3, bgcolor: 'rgba(255,255,255,0.02)', borderRadius: 3 }}>
                         <Typography variant="h3" sx={{ fontWeight: 900, color: 'info.main' }}>
-                          {selectedContract.extracted_data.liability_exclusions.length}
+                          {selectedContract.extracted_data.liability_obligations.liability_exclusions.length}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">Exclusions</Typography>
                       </Paper>
@@ -479,7 +525,7 @@ const ContractIntelligence: React.FC = () => {
                   </Grid>
 
                   {/* Liability Exclusions */}
-                  {selectedContract.extracted_data.liability_exclusions.length > 0 && (
+                  {selectedContract.extracted_data.liability_obligations.liability_exclusions.length > 0 && (
                     <Card className="glass-card">
                       <CardContent sx={{ p: 4 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', mb: 3, gap: 2 }}>
@@ -490,9 +536,16 @@ const ContractIntelligence: React.FC = () => {
                           </Box>
                         </Box>
                         <Stack spacing={1}>
-                          {selectedContract.extracted_data.liability_exclusions.map((exclusion, i) => (
+                          {selectedContract.extracted_data.liability_obligations.liability_exclusions.map((exclusion, i) => (
                             <Box key={i} sx={{ p: 2, bgcolor: 'rgba(255, 152, 0, 0.05)', borderRadius: 2, border: '1px solid rgba(255, 152, 0, 0.1)' }}>
-                              <Typography variant="body2">{exclusion}</Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.5 }}>
+                                {exclusion.exclusion_type}
+                              </Typography>
+                              {exclusion.description && (
+                                <Typography variant="caption" color="text.secondary">
+                                  {exclusion.description}
+                                </Typography>
+                              )}
                             </Box>
                           ))}
                         </Stack>
@@ -525,7 +578,7 @@ const ContractIntelligence: React.FC = () => {
                           </tr>
                         </thead>
                         <tbody>
-                          {selectedContract.extracted_data.incident_slas.map((sla, i) => (
+                          {selectedContract.extracted_data.compliance_obligations.incident_slas.map((sla, i) => (
                             <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                               <td style={{ padding: '12px' }}>{renderRiskChip(sla.priority)}</td>
                               <td style={{ padding: '12px' }}>{sla.acknowledge_minutes ? `${sla.acknowledge_minutes} min` : '-'}</td>
@@ -553,7 +606,7 @@ const ContractIntelligence: React.FC = () => {
                       </Box>
                     </Box>
                     <Stack spacing={2}>
-                      {selectedContract.extracted_data.service_credits.map((credit, i) => (
+                      {selectedContract.extracted_data.risk_obligations.service_credits.map((credit, i) => (
                         <Box key={i} sx={{ p: 3, bgcolor: 'rgba(244, 143, 177, 0.05)', borderRadius: 3, border: '1px solid rgba(244, 143, 177, 0.1)' }}>
                           <Typography variant="subtitle2" sx={{ fontWeight: 800, color: 'secondary.main', mb: 1 }}>
                             {credit.breach_condition}
